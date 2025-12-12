@@ -2,18 +2,19 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { 
-  Package, 
-  ShoppingCart, 
-  AlertTriangle, 
-  TrendingUp, 
-  Users, 
+import {
+  Package,
+  ShoppingCart,
+  AlertTriangle,
+  TrendingUp,
+  Users,
   Clock,
   MapPin,
   Settings,
   PlusCircle,
   BarChart3,
-  Calendar
+  Calendar,
+  Store
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -55,9 +56,9 @@ const PharmacienDashboard: React.FC = () => {
   // Récupérer les médicaments
   const { data: medicamentsData, isLoading: medicamentsLoading } = useQuery({
     queryKey: ['pharmacy-medicaments', pharmacy?.id],
-    queryFn: () => medicamentService.getAll({ 
+    queryFn: () => medicamentService.getAll({
       pharmacy_id: pharmacy?.id,
-      per_page: 50 
+      per_page: 50
     }),
     enabled: !!pharmacy,
   });
@@ -65,7 +66,7 @@ const PharmacienDashboard: React.FC = () => {
   // Récupérer les commandes
   const { data: commandesData, isLoading: commandesLoading } = useQuery({
     queryKey: ['pharmacy-commandes', pharmacy?.id],
-    queryFn: () => commandeService.getAll({ 
+    queryFn: () => commandeService.getAll({
       pharmacy_id: pharmacy?.id,
       per_page: 10,
       date_from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -78,13 +79,13 @@ const PharmacienDashboard: React.FC = () => {
     if (medicamentsData && commandesData) {
       const medicaments = medicamentsData.data || [];
       const commandes = commandesData.data || [];
-      
+
       // Commandes d'aujourd'hui
       const today = new Date().toISOString().split('T')[0];
-      const todayOrders = commandes.filter(c => 
+      const todayOrders = commandes.filter(c =>
         c.created_at.startsWith(today)
       );
-      
+
       // Calcul des statistiques
       setStats({
         totalMedicaments: medicaments.length,
@@ -103,7 +104,7 @@ const PharmacienDashboard: React.FC = () => {
       const response = await pharmacyService.toggleGarde(pharmacy.id);
       setPharmacy({ ...pharmacy, is_garde: response.is_garde });
       toast.success(
-        response.is_garde 
+        response.is_garde
           ? '✅ Pharmacie mise en garde avec succès'
           : '✅ Pharmacie retirée de la garde'
       );
@@ -145,11 +146,12 @@ const PharmacienDashboard: React.FC = () => {
               <p className="text-yellow-700 mt-1">
                 Vous n'avez pas encore de pharmacie. Veuillez en créer une pour commencer.
               </p>
+              // Dans PharmacienDashboard.tsx, modifiez le bouton de création :
               <Link
-                to="/pharmacien/pharmacy/create"
-                className="inline-flex items-center mt-4 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 font-medium"
+                to="/pharmacien/pharmacy/create"  // Assurez-vous que c'est la même route
+                className="inline-flex items-center mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-lg shadow-sm hover:shadow transition-all"
               >
-                <PlusCircle className="h-4 w-4 mr-2" />
+                <Store className="h-5 w-5 mr-2" />
                 Créer ma pharmacie
               </Link>
             </div>
@@ -178,30 +180,28 @@ const PharmacienDashboard: React.FC = () => {
                 <span className="font-medium">{pharmacy.name}</span>
               </div>
               <div className="flex items-center">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  pharmacy.is_active 
-                    ? 'bg-green-100 text-green-800' 
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${pharmacy.is_active
+                    ? 'bg-green-100 text-green-800'
                     : 'bg-red-100 text-red-800'
-                }`}>
+                  }`}>
                   {pharmacy.is_active ? '🟢 ACTIVE' : '🔴 INACTIVE'}
                 </span>
               </div>
             </div>
           </div>
-          
+
           <div className="flex flex-wrap gap-3">
             <button
               onClick={toggleGarde}
-              className={`px-4 py-2 rounded-lg font-medium flex items-center ${
-                pharmacy.is_garde 
-                  ? 'bg-red-100 text-red-700 hover:bg-red-200' 
+              className={`px-4 py-2 rounded-lg font-medium flex items-center ${pharmacy.is_garde
+                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+                }`}
             >
               <Clock className="h-4 w-4 mr-2" />
               {pharmacy.is_garde ? '🚨 PHARMACIE DE GARDE' : 'Mettre en garde'}
             </button>
-            
+
             <Link
               to="/pharmacien/settings"
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center"
@@ -241,7 +241,7 @@ const PharmacienDashboard: React.FC = () => {
             Gérer les médicaments →
           </Link>
         </motion.div>
-        
+
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -268,7 +268,7 @@ const PharmacienDashboard: React.FC = () => {
             Voir les commandes →
           </Link>
         </motion.div>
-        
+
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -295,7 +295,7 @@ const PharmacienDashboard: React.FC = () => {
             Réapprovisionner →
           </Link>
         </motion.div>
-        
+
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -375,7 +375,7 @@ const PharmacienDashboard: React.FC = () => {
               Voir toutes →
             </Link>
           </div>
-          
+
           {commandesLoading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -440,7 +440,7 @@ const PharmacienDashboard: React.FC = () => {
               Voir tous →
             </Link>
           </div>
-          
+
           {medicamentsLoading ? (
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -480,20 +480,18 @@ const PharmacienDashboard: React.FC = () => {
                           <span>Stock: {medicament.quantity}</span>
                           <div className="ml-3 w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div
-                              className={`h-full ${
-                                medicament.quantity < 5 ? 'bg-red-500' : 
-                                medicament.quantity < 10 ? 'bg-yellow-500' : 
-                                'bg-green-500'
-                              }`}
+                              className={`h-full ${medicament.quantity < 5 ? 'bg-red-500' :
+                                  medicament.quantity < 10 ? 'bg-yellow-500' :
+                                    'bg-green-500'
+                                }`}
                               style={{ width: `${(medicament.quantity / 50) * 100}%` }}
                             ></div>
                           </div>
                         </div>
                       </div>
                     </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      medicament.quantity < 5 ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${medicament.quantity < 5 ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+                      }`}>
                       {medicament.quantity < 5 ? 'CRITIQUE' : 'FAIBLE'}
                     </span>
                   </div>
@@ -524,7 +522,7 @@ const PharmacienDashboard: React.FC = () => {
               </div>
             </div>
           </Link>
-          
+
           <Link
             to="/pharmacien/commandes"
             className="bg-white p-4 rounded-lg hover:shadow-md transition-shadow border border-gray-200"
@@ -537,7 +535,7 @@ const PharmacienDashboard: React.FC = () => {
               </div>
             </div>
           </Link>
-          
+
           <Link
             to="/pharmacien/statistics"
             className="bg-white p-4 rounded-lg hover:shadow-md transition-shadow border border-gray-200"
@@ -550,7 +548,7 @@ const PharmacienDashboard: React.FC = () => {
               </div>
             </div>
           </Link>
-          
+
           <Link
             to="/pharmacien/settings"
             className="bg-white p-4 rounded-lg hover:shadow-md transition-shadow border border-gray-200"

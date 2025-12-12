@@ -1,32 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { GoogleMap, Marker, InfoWindow, DirectionsRenderer } from '@react-google-maps/api';
-import { Navigation, MapPin, Clock, Package, Truck, Target } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { GoogleMap, Marker, DirectionsRenderer, useJsApiLoader } from '@react-google-maps/api';
+import {
+  Navigation, Target, Clock, MapPin, Truck,
+  Package, Phone, User, Navigation2
+} from 'lucide-react';
 import { livraisonService } from '../../../services/api/livraison.service';
+import { toast } from 'react-hot-toast';
 
 const mapContainerStyle = {
   width: '100%',
-  height: '500px',
+  height: '500px'
 };
 
 const defaultCenter = {
-  lat: 6.1375, // Lomé, Togo
-  lng: 1.2123,
+  lat: 6.1375,
+  lng: 1.2123
 };
 
 const MapTrackingPage: React.FC = () => {
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_API_KEY || '',
+  });
+  
+  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const [activeLivraison, setActiveLivraison] = useState<any>(null);
+  const [directions, setDirections] = useState<google.maps.DirectionsResult | null>(null);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [selectedLivraison, setSelectedLivraison] = useState<any>(null);
-  const [directions, setDirections] = useState<any>(null);
-  const [map, setMap] = useState<any>(null);
-
+  
   // Récupérer les livraisons en cours
   const { data: livraisons } = useQuery({
-    queryKey: ['livraisons-map'],
+    queryKey: ['livraisons-en-cours'],
     queryFn: () => livraisonService.getAll({ status: 'en_cours' }),
   });
 
-  // Géolocalisation de l'utilisateur
+  // Obtenir la position de l'utilisateur
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -38,296 +46,287 @@ const MapTrackingPage: React.FC = () => {
         },
         (error) => {
           console.error('Erreur de géolocalisation:', error);
+          toast.error('Impossible d\'obtenir votre position');
         }
       );
     }
   }, []);
 
   // Calculer l'itinéraire
-  const calculateRoute = (destination: { lat: number; lng: number }) => {
-    if (!userLocation || !window.google) return;
+  const calculateRoute = () => {
+    if (!activeLivraison || !userLocation) return;
 
-    const directionsService = new window.google.maps.DirectionsService();
+    const directionsService = new google.maps.DirectionsService();
     
     directionsService.route(
       {
-        origin: userLocation,
-        destination: destination,
-        travelMode: window.google.maps.TravelMode.DRIVING,
+        origin: new google.maps.LatLng(userLocation.lat, userLocation.lng),
+        destination: new google.maps.LatLng(
+          activeLivraison.delivery_lat || defaultCenter.lat,
+          activeLivraison.delivery_lng || defaultCenter.lng
+        ),
+        travelMode: google.maps.TravelMode.DRIVING,
       },
       (result, status) => {
         if (status === 'OK' && result) {
           setDirections(result);
+        } else {
+          toast.error('Impossible de calculer l\'itinéraire');
         }
       }
     );
   };
 
-  const getMarkerIcon = (status: string) => {
-    const icons = {
-      'en_attente': '🟡',
-      'en_cours': '🔵',
-      'livree': '🟢',
-      'annulee': '🔴',
-    };
-    return icons[status as keyof typeof icons] || '⚫';
+  // Mettre à jour la position du livreur
+  const updatePosition = () => {
+    if (!userLocation || !activeLivraison) return;
+
+    toast.promise(
+      livraisonService.updatePosition(activeLivraison.id, {
+        latitude: userLocation.lat,
+        longitude: userLocation.lng,
+      }),
+      {
+        loading: 'Mise à jour de la position...',
+        success: 'Position mise à jour',
+        error: 'Erreur lors de la mise à jour',
+      }
+    );
   };
 
-  const formatDistance = (meters: number) => {
-    if (meters < 1000) {
-      return `${Math.round(meters)} m`;
+  // Effet pour calculer l'itinéraire quand la livraison active ou la position change
+  useEffect(() => {
+    if (activeLivraison && userLocation && isLoaded) {
+      calculateRoute();
     }
-    return `${(meters / 1000).toFixed(1)} km`;
-  };
+  }, [activeLivraison, userLocation, isLoaded]);
 
-  const formatDuration = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes}min`;
+  // Sélectionner la première livraison en cours par défaut
+  useEffect(() => {
+    if (livraisons && livraisons.length > 0 && !activeLivraison) {
+      setActiveLivraison(livraisons[0]);
     }
-    return `${minutes} min`;
-  };
+  }, [livraisons, activeLivraison]);
+
+  if (loadError) {
+    return (
+      <div className="p-6 text-center">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+          <Navigation className="h-12 w-12 mx-auto text-red-500 mb-4" />
+          <h3 className="text-lg font-bold text-red-700 mb-2">Erreur de chargement de la carte</h3>
+          <p className="text-red-600">
+            Impossible de charger Google Maps. Vérifiez votre connexion internet et votre clé API.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Carte de Suivi des Livraisons</h1>
-        <p className="text-gray-600">Visualisez et gérez vos livraisons en temps réel</p>
+        <h1 className="text-2xl font-bold text-gray-900">Suivi des Livraisons</h1>
+        <p className="text-gray-600">Suivez vos livraisons en temps réel</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Carte */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-xl shadow overflow-hidden">
-            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
-                  <span className="text-sm">Position actuelle</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                  <span className="text-sm">Livraison en cours</span>
-                </div>
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                  <span className="text-sm">Point de livraison</span>
-                </div>
+            <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+              <div className="flex items-center">
+                <Navigation className="h-5 w-5 mr-2 text-blue-600" />
+                <h3 className="font-bold">Carte de suivi</h3>
               </div>
-              
               <button
-                onClick={() => userLocation && map?.panTo(userLocation)}
-                className="flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                onClick={updatePosition}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm flex items-center"
               >
-                <Navigation className="h-4 w-4 mr-2" />
-                Centrer sur moi
+                <Target className="h-4 w-4 mr-2" />
+                Mettre à jour ma position
               </button>
             </div>
-
-            <div className="relative">
+            
+            {isLoaded ? (
               <GoogleMap
                 mapContainerStyle={mapContainerStyle}
-                zoom={13}
                 center={userLocation || defaultCenter}
-                onLoad={(map) => setMap(map)}
-                options={{
-                  zoomControl: true,
-                  mapTypeControl: true,
-                  streetViewControl: false,
-                  fullscreenControl: true,
-                }}
+                zoom={14}
+                onLoad={setMap}
               >
-                {/* Marqueur position utilisateur */}
+                {/* Marqueur de l'utilisateur */}
                 {userLocation && (
                   <Marker
                     position={userLocation}
                     icon={{
-                      url: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="%23007bff"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`,
-                      scaledSize: new window.google.maps.Size(40, 40),
+                      path: google.maps.SymbolPath.CIRCLE,
+                      scale: 8,
+                      fillColor: '#3B82F6',
+                      fillOpacity: 1,
+                      strokeColor: '#FFFFFF',
+                      strokeWeight: 2,
                     }}
                     title="Votre position"
                   />
                 )}
 
-                {/* Marqueurs des livraisons */}
-                {livraisons?.data?.map((livraison: any) => (
+                {/* Marqueur de destination */}
+                {activeLivraison && (
                   <Marker
-                    key={livraison.id}
                     position={{
-                      lat: livraison.delivery_lat || 6.1375,
-                      lng: livraison.delivery_lng || 1.2123,
+                      lat: activeLivraison.delivery_lat || defaultCenter.lat,
+                      lng: activeLivraison.delivery_lng || defaultCenter.lng,
                     }}
                     icon={{
-                      url: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="${livraison.status === 'en_cours' ? '%2328a745' : '%23dc3545'}"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`,
-                      scaledSize: new window.google.maps.Size(40, 40),
+                      path: google.maps.SymbolPath.CIRCLE,
+                      scale: 10,
+                      fillColor: '#EF4444',
+                      fillOpacity: 1,
+                      strokeColor: '#FFFFFF',
+                      strokeWeight: 2,
                     }}
-                    onClick={() => {
-                      setSelectedLivraison(livraison);
-                      calculateRoute({
-                        lat: livraison.delivery_lat || 6.1375,
-                        lng: livraison.delivery_lng || 1.2123,
-                      });
-                    }}
-                    title={`Livraison ${livraison.tracking_number}`}
+                    title="Destination de livraison"
                   />
-                ))}
+                )}
 
                 {/* Itinéraire */}
-                {directions && <DirectionsRenderer directions={directions} />}
-
-                {/* InfoWindow pour la livraison sélectionnée */}
-                {selectedLivraison && (
-                  <InfoWindow
-                    position={{
-                      lat: selectedLivraison.delivery_lat || 6.1375,
-                      lng: selectedLivraison.delivery_lng || 1.2123,
-                    }}
-                    onCloseClick={() => setSelectedLivraison(null)}
-                  >
-                    <div className="p-4 max-w-xs">
-                      <div className="flex items-center mb-3">
-                        <Package className="h-6 w-6 text-blue-500 mr-2" />
-                        <h3 className="font-bold text-lg">Livraison {selectedLivraison.tracking_number}</h3>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <div className="flex items-center">
-                          <MapPin className="h-4 w-4 text-gray-400 mr-2" />
-                          <span className="text-sm">{selectedLivraison.delivery_address}</span>
-                        </div>
-                        
-                        <div className="flex items-center">
-                          <Truck className="h-4 w-4 text-gray-400 mr-2" />
-                          <span className="text-sm">Commande: {selectedLivraison.commande?.numero_commande}</span>
-                        </div>
-                        
-                        <div className="flex items-center">
-                          <Clock className="h-4 w-4 text-gray-400 mr-2" />
-                          <span className="text-sm">Statut: {selectedLivraison.status}</span>
-                        </div>
-                        
-                        {directions?.routes[0]?.legs[0] && (
-                          <div className="mt-3 pt-3 border-t border-gray-200">
-                            <div className="flex justify-between text-sm">
-                              <span>Distance:</span>
-                              <span className="font-medium">
-                                {formatDistance(directions.routes[0].legs[0].distance.value)}
-                              </span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span>Durée estimée:</span>
-                              <span className="font-medium">
-                                {formatDuration(directions.routes[0].legs[0].duration.value)}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                        
-                        <button
-                          onClick={() => {
-                            // Logique pour démarrer la livraison
-                            setSelectedLivraison(null);
-                          }}
-                          className="mt-3 w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 text-sm"
-                        >
-                          Démarrer cette livraison
-                        </button>
-                      </div>
-                    </div>
-                  </InfoWindow>
+                {directions && (
+                  <DirectionsRenderer directions={directions} />
                 )}
               </GoogleMap>
-            </div>
+            ) : (
+              <div className="h-96 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Chargement de la carte...</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Liste des livraisons */}
-        <div>
+        <div className="space-y-4">
           <div className="bg-white rounded-xl shadow p-6">
-            <h3 className="text-lg font-bold mb-4 flex items-center">
-              <Target className="h-5 w-5 mr-2 text-blue-500" />
-              Livraisons à proximité
+            <h3 className="font-bold mb-4 flex items-center">
+              <Truck className="h-5 w-5 mr-2" />
+              Livraisons en cours
             </h3>
             
             <div className="space-y-4">
-              {livraisons?.data?.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Truck className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+              {livraisons?.map((livraison) => (
+                <div
+                  key={livraison.id}
+                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                    activeLivraison?.id === livraison.id
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
+                  }`}
+                  onClick={() => setActiveLivraison(livraison)}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-bold">#{livraison.tracking_number}</p>
+                      <p className="text-sm text-gray-600">
+                        {livraison.commande?.user?.name}
+                      </p>
+                    </div>
+                    <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                      En cours
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center text-sm text-gray-500 mb-2">
+                    <MapPin className="h-4 w-4 mr-1" />
+                    <span className="truncate">{livraison.delivery_address}</span>
+                  </div>
+                  
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Package className="h-4 w-4 mr-1" />
+                    <span>{livraison.commande?.items?.length || 0} articles</span>
+                  </div>
+                </div>
+              ))}
+              
+              {(!livraisons || livraisons.length === 0) && (
+                <div className="text-center py-6 text-gray-500">
+                  <Truck className="h-12 w-12 mx-auto mb-4 text-gray-300" />
                   <p>Aucune livraison en cours</p>
                 </div>
-              ) : (
-                livraisons?.data?.map((livraison: any) => (
-                  <div
-                    key={livraison.id}
-                    className={`p-4 rounded-lg border cursor-pointer hover:border-blue-500 transition-colors ${
-                      selectedLivraison?.id === livraison.id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200'
-                    }`}
-                    onClick={() => setSelectedLivraison(livraison)}
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center">
-                        <div className={`w-3 h-3 rounded-full mr-2 ${
-                          livraison.status === 'en_cours' ? 'bg-green-500' : 'bg-yellow-500'
-                        }`}></div>
-                        <span className="font-medium">{livraison.tracking_number}</span>
-                      </div>
-                      <span className={`text-xs px-2 py-1 rounded ${
-                        livraison.status === 'en_cours'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {livraison.status}
-                      </span>
-                    </div>
-                    
-                    <p className="text-sm text-gray-600 mb-2 truncate">
-                      {livraison.delivery_address}
-                    </p>
-                    
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>{livraison.commande?.numero_commande}</span>
-                      <span>{livraison.commande?.total_amount?.toLocaleString()} FCFA</span>
-                    </div>
-                  </div>
-                ))
               )}
             </div>
           </div>
 
-          {/* Instructions */}
-          <div className="mt-6 bg-blue-50 rounded-xl shadow p-6">
-            <h4 className="font-bold text-blue-800 mb-3">Instructions</h4>
-            <ul className="space-y-2 text-sm text-blue-700">
-              <li className="flex items-start">
-                <div className="bg-blue-600 text-white rounded-full h-5 w-5 flex items-center justify-center mr-2 mt-0.5">
-                  1
+          {/* Détails de la livraison active */}
+          {activeLivraison && (
+            <div className="bg-white rounded-xl shadow p-6">
+              <h3 className="font-bold mb-4 flex items-center">
+                <Package className="h-5 w-5 mr-2" />
+                Détails de la livraison
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-1">Client</h4>
+                  <div className="flex items-center">
+                    <User className="h-4 w-4 mr-2 text-gray-400" />
+                    <span>{activeLivraison.commande?.user?.name}</span>
+                  </div>
                 </div>
-                <span>Sélectionnez une livraison sur la carte ou dans la liste</span>
-              </li>
-              <li className="flex items-start">
-                <div className="bg-blue-600 text-white rounded-full h-5 w-5 flex items-center justify-center mr-2 mt-0.5">
-                  2
+                
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-1">Téléphone</h4>
+                  <div className="flex items-center">
+                    <Phone className="h-4 w-4 mr-2 text-gray-400" />
+                    <span>{activeLivraison.commande?.delivery_phone || activeLivraison.commande?.user?.phone}</span>
+                  </div>
                 </div>
-                <span>L'itinéraire optimal sera calculé automatiquement</span>
-              </li>
-              <li className="flex items-start">
-                <div className="bg-blue-600 text-white rounded-full h-5 w-5 flex items-center justify-center mr-2 mt-0.5">
-                  3
+                
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-1">Adresse</h4>
+                  <div className="flex items-center">
+                    <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                    <span className="text-sm">{activeLivraison.delivery_address}</span>
+                  </div>
                 </div>
-                <span>Cliquez sur "Démarrer cette livraison" pour commencer</span>
-              </li>
-              <li className="flex items-start">
-                <div className="bg-blue-600 text-white rounded-full h-5 w-5 flex items-center justify-center mr-2 mt-0.5">
-                  4
+                
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-1">Heure estimée</h4>
+                  <div className="flex items-center">
+                    <Clock className="h-4 w-4 mr-2 text-gray-400" />
+                    <span>
+                      {activeLivraison.estimated_delivery_time
+                        ? new Date(activeLivraison.estimated_delivery_time).toLocaleTimeString()
+                        : 'Non spécifiée'}
+                    </span>
+                  </div>
                 </div>
-                <span>Suivez les instructions de navigation en temps réel</span>
-              </li>
-            </ul>
-          </div>
+                
+                {directions?.routes[0]?.legs[0] && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500 mb-1">Distance et durée</h4>
+                    <div className="space-y-1">
+                      <p className="text-sm">
+                        <span className="font-medium">Distance:</span>{' '}
+                        {directions.routes[0].legs[0].distance?.text}
+                      </p>
+                      <p className="text-sm">
+                        <span className="font-medium">Durée:</span>{' '}
+                        {directions.routes[0].legs[0].duration?.text}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="pt-4 border-t">
+                  <button className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center justify-center">
+                    <Navigation2 className="h-5 w-5 mr-2" />
+                    Marquer comme livré
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,5 +1,4 @@
-// tailwind.config.js
-/** @type {import('tailwindcss').Config} */
+// tailwind.config.js - Version simplifiée
 module.exports = {
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
@@ -8,35 +7,21 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
+          50: '#f0f9ff',
+          100: '#e0f2fe',
+          500: '#0ea5e9',
+          600: '#0284c7',
         },
         pharma: {
-          green: '#10B981',
-          yellow: '#F59E0B',
-          red: '#EF4444',
-          blue: '#3B82F6',
-          purple: '#8B5CF6',
+          green: '#008000',
+          yellow: '#FDDA0D',
+          red: '#D62828',
+          blue: '#003049',
         }
-      },
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-      },
-      animation: {
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       },
     },
   },
   plugins: [
-    require('@tailwindcss/forms'),
-    require('@tailwindcss/typography'),
+    // Retirez @tailwindcss/forms et @tailwindcss/typography si non utilisés
   ],
 }

@@ -49,6 +49,8 @@ import MapTrackingPage from './pages/dashboard/livreur/MapTrackingPage';
 
 // Components
 import ProtectedRoute from './components/shared/ProtectedRoute';
+import PharmacyCreatePage from './pages/dashboard/pharmacien/PharmacyCreatePage';
+import CreatePharmacyPage from './pages/dashboard/pharmacien/PharmacyCreatePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,14 +79,14 @@ const App: React.FC = () => {
                   <Route path="/medicaments" element={<MedicamentsPage />} />
                   <Route path="/medicaments/:id" element={<MedicamentDetailPage />} />
                 </Route>
-                
+
                 {/* Routes d'authentification */}
                 <Route element={<AuthLayout />}>
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<RegisterPage />} />
                   <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 </Route>
-                
+
                 {/* Routes protégées - Admin */}
                 <Route path="/admin">
                   <Route index element={
@@ -108,6 +110,16 @@ const App: React.FC = () => {
                       </DashboardLayout>
                     </ProtectedRoute>
                   } />
+
+                  // Dans src/App.tsx, ajoutez cette route dans les routes pharmacien
+                  <Route path="/pharmacien/pharmacy/create" element={
+                    <ProtectedRoute requiredRole="pharmacien">
+                      <DashboardLayout role="pharmacien">
+                        <CreatePharmacyPage />
+                      </DashboardLayout>
+                    </ProtectedRoute>
+                  } />
+
                   <Route path="statistics" element={
                     <ProtectedRoute requiredRole="admin">
                       <DashboardLayout role="admin">
@@ -116,7 +128,7 @@ const App: React.FC = () => {
                     </ProtectedRoute>
                   } />
                 </Route>
-                
+
                 {/* Routes protégées - Pharmacien */}
                 <Route path="/pharmacien">
                   <Route index element={
@@ -155,7 +167,7 @@ const App: React.FC = () => {
                     </ProtectedRoute>
                   } />
                 </Route>
-                
+
                 {/* Routes protégées - Client */}
                 <Route path="/client">
                   <Route index element={
@@ -187,7 +199,7 @@ const App: React.FC = () => {
                     </ProtectedRoute>
                   } />
                 </Route>
-                
+
                 {/* Routes protégées - Livreur */}
                 <Route path="/livreur">
                   <Route index element={
@@ -212,11 +224,11 @@ const App: React.FC = () => {
                     </ProtectedRoute>
                   } />
                 </Route>
-                
+
                 {/* Redirection par défaut */}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
-              <Toaster 
+              <Toaster
                 position="top-right"
                 toastOptions={{
                   duration: 4000,

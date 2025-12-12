@@ -2,6 +2,7 @@
 import axiosClient from './axiosClient';
 import { User, UserRole } from '../../types/user.types';
 import { Category } from '../../types/category.types';
+import { Pharmacy } from '../../types/pharmacy.types';
 
 export const adminService = {
   // Gestion des utilisateurs
@@ -24,6 +25,31 @@ export const adminService = {
     await axiosClient.delete(`/users/${id}`);
   },
 
+  // NOUVELLES MÉTHODES POUR LES PHARMACIES
+  getAllPharmacies: async (params?: {
+    status?: 'active' | 'inactive';
+    garde?: boolean;
+    search?: string;
+  }): Promise<Pharmacy[]> => {
+    const response = await axiosClient.get('/pharmacies', { params });
+    return response.data;
+  },
+
+  togglePharmacyActive: async (id: number): Promise<{ message: string; is_active: boolean }> => {
+    const response = await axiosClient.put(`/pharmacies/${id}/toggle-active`);
+    return response.data;
+  },
+
+  getPharmacyStats: async (): Promise<{
+    total: number;
+    active: number;
+    inactive: number;
+    withGarde: number;
+  }> => {
+    const response = await axiosClient.get('/pharmacies/stats');
+    return response.data;
+  },
+
   // Gestion des catégories
   createCategory: async (data: FormData): Promise<Category> => {
     const response = await axiosClient.post('/categories', data, {
@@ -34,10 +60,10 @@ export const adminService = {
 
   updateCategory: async (id: number, data: FormData | Partial<Category>): Promise<Category> => {
     const isFormData = data instanceof FormData;
-    const headers = isFormData 
+    const headers = isFormData
       ? { 'Content-Type': 'multipart/form-data' }
       : { 'Content-Type': 'application/json' };
-    
+
     const response = await axiosClient.put(`/categories/${id}`, data, { headers });
     return response.data;
   },

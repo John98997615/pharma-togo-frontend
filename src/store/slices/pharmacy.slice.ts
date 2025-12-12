@@ -30,7 +30,7 @@ const initialState: PharmacyState = {
 // Thunks asynchrones
 export const fetchPharmacies = createAsyncThunk(
   'pharmacies/fetchPharmacies',
-  async (params?: any, { rejectWithValue }) => {
+  async (params: any = {}, { rejectWithValue }) => {
     try {
       const data = await pharmacyService.getAll(params);
       return { data, meta: { current_page: 1, last_page: 1, total: data.length } };

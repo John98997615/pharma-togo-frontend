@@ -1,123 +1,114 @@
 // src/context/AuthContext.tsx
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User } from '../types/user.types';
 import { authService } from '../services/api/auth.service';
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
-  isLoading: boolean;
+  isLoading: boolean; // Ajoutez cette ligne
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   register: (data: any) => Promise<void>;
-  updateProfile: (data: Partial<User>) => Promise<void>;
-  refreshUser: () => Promise<void>;
+  updateProfile: (data: any) => Promise<User>; // Ajoutez cette ligne
+  updateUser: (user: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('access_token'));
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Renommez en isLoading
 
-  const refreshUser = useCallback(async () => {
-    try {
-      const userData = await authService.getCurrentUser();
-      setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
-    } catch (error) {
-      console.error('Erreur lors du rafraîchissement de l\'utilisateur:', error);
-      setUser(null);
-      setToken(null);
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-    }
-  }, []);
-
+  // Initialisation
   useEffect(() => {
     const initAuth = async () => {
-      const storedToken = localStorage.getItem('access_token');
-      if (storedToken) {
-        try {
-          await refreshUser();
-        } catch (error) {
-          console.error('Erreur d\'authentification:', error);
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('user');
+      try {
+        const storedUser = authService.getStoredUser();
+
+        if (storedUser && authService.isAuthenticated()) {
+          // Vérifier avec le serveur
+          const freshUser = await authService.getCurrentUser();
+          setUser(freshUser);
         }
+      } catch (error) {
+        console.log('Session expirée, nettoyage...');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
-    
+
     initAuth();
-  }, [refreshUser]);
+  }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<void> => {
     setIsLoading(true);
     try {
-      const { user, access_token } = await authService.login({ email, password });
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('user', JSON.stringify(user));
-      setToken(access_token);
-      setUser(user);
+      const { user: userData } = await authService.login({ email, password });
+      setUser(userData);
+    } catch (error: any) {
+      // Gestion des erreurs...
+      // src/context/AuthContext.tsx - dans initAuth ou login
+      console.log('User data:', user);
+      console.log('User pharmacy:', user?.pharmacy);
+      throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const register = async (data: any) => {
-    setIsLoading(true);
-    try {
-      const { user, access_token } = await authService.register(data);
-      localStorage.setItem('access_token', access_token);
-      localStorage.setItem('user', JSON.stringify(user));
-      setToken(access_token);
-      setUser(user);
-    } finally {
-      setIsLoading(false);
-    }
+  const logout = async (): Promise<void> => {
+    await authService.logout();
+    setUser(null);
   };
 
-  const logout = async () => {
+  const register = async (data: any): Promise<void> => {
     setIsLoading(true);
     try {
-      await authService.logout();
+      const { user: userData } = await authService.register(data);
+      setUser(userData);
     } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error);
+      throw error;
     } finally {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      setToken(null);
-      setUser(null);
       setIsLoading(false);
     }
   };
 
-  const updateProfile = async (data: Partial<User>) => {
-    if (!user) return;
+  // Ajoutez cette fonction
+  const updateProfile = async (data: any): Promise<User> => {
+    if (!user) throw new Error('Utilisateur non connecté');
+
+    setIsLoading(true);
     try {
       const updatedUser = await authService.updateProfile(user.id, data);
       setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-    } catch (error) {
-      console.error('Erreur lors de la mise à jour du profil:', error);
-      throw error;
+      return updatedUser;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const value = {
+  const updateUser = (updatedUser: User) => {
+    setUser(updatedUser);
+    localStorage.setItem('user', JSON.stringify(updatedUser));
+  };
+
+  const value: AuthContextType = {
     user,
-    token,
-    isLoading,
+    isLoading, // Utilisez isLoading
     login,
     logout,
     register,
-    updateProfile,
-    refreshUser,
+    updateProfile, // Ajoutez cette ligne
+    updateUser,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => {

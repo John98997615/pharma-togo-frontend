@@ -13,17 +13,37 @@ import {
 import { Medicament } from '../../../types/medicament.types';
 import { toast } from 'react-hot-toast';
 
+// Définir le type pour les items du panier
+interface CartItemType {
+  id: number;
+  medicament: {
+    id: number;
+    name: string;
+    price: number;
+    image?: string;
+    pharmacy: {
+      id: number;
+      name: string;
+    };
+  };
+  quantity: number;
+  pharmacyId: number;
+}
+
 const CartPage: React.FC = () => {
   const navigate = useNavigate();
-  const [cartItems, setCartItems] = useState<any[]>([
+  const [cartItems, setCartItems] = useState<CartItemType[]>([
     {
       id: 1,
       medicament: {
         id: 1,
         name: 'Paracétamol 500mg',
         price: 500,
-        image: null,
-        pharmacy: { name: 'Pharmacie du Centre' }
+        image: undefined,
+        pharmacy: { 
+          id: 1,
+          name: 'Pharmacie du Centre' 
+        }
       },
       quantity: 2,
       pharmacyId: 1
@@ -34,8 +54,11 @@ const CartPage: React.FC = () => {
         id: 2,
         name: 'Vitamine C',
         price: 1500,
-        image: null,
-        pharmacy: { name: 'Pharmacie du Centre' }
+        image: undefined,
+        pharmacy: { 
+          id: 1,
+          name: 'Pharmacie du Centre' 
+        }
       },
       quantity: 1,
       pharmacyId: 1
@@ -65,6 +88,27 @@ const CartPage: React.FC = () => {
     }, 0);
   };
 
+  // Fonction utilitaire pour obtenir les IDs de pharmacies uniques
+  const getUniquePharmacyIds = (items: CartItemType[]): number[] => {
+    const ids = items.map(item => item.pharmacyId);
+    const uniqueIds = Array.from(new Set(ids));
+    return uniqueIds;
+  };
+
+  // Fonction utilitaire pour obtenir les noms de pharmacies uniques
+  const getUniquePharmacyNames = (items: CartItemType[]): string[] => {
+    const names = items.map(item => item.medicament.pharmacy.name);
+    const uniqueNames = Array.from(new Set(names));
+    return uniqueNames;
+  };
+
+  // Vérifier si tous les items sont de la même pharmacie
+  const allSamePharmacy = (items: CartItemType[]): boolean => {
+    if (items.length === 0) return true;
+    const uniquePharmacyIds = getUniquePharmacyIds(items);
+    return uniquePharmacyIds.length === 1;
+  };
+
   const handleCheckout = () => {
     if (cartItems.length === 0) {
       toast.error('Votre panier est vide');
@@ -72,23 +116,34 @@ const CartPage: React.FC = () => {
     }
 
     // Vérifier si tous les produits sont de la même pharmacie
-    const pharmacyIds = [...new Set(cartItems.map(item => item.pharmacyId))];
-    if (pharmacyIds.length > 1) {
-      toast.error('Veuillez commander d\'une seule pharmacie à la fois');
+    const uniquePharmacyIds = getUniquePharmacyIds(cartItems);
+    
+    if (uniquePharmacyIds.length > 1) {
+      // Récupérer les noms des pharmacies différentes pour un meilleur message d'erreur
+      const uniquePharmacyNames = getUniquePharmacyNames(cartItems);
+      toast.error(`Veuillez commander d'une seule pharmacie à la fois. Vous avez des produits de: ${uniquePharmacyNames.join(', ')}`);
       return;
     }
 
     // Naviguer vers la page de commande
     navigate('/client/commandes/new', { 
       state: { 
-        pharmacyId: pharmacyIds[0],
+        pharmacyId: uniquePharmacyIds[0],
         items: cartItems.map(item => ({
           medicament_id: item.medicament.id,
-          quantity: item.quantity
+          quantity: item.quantity,
+          price: item.medicament.price,
+          name: item.medicament.name
         }))
       }
     });
   };
+
+  const isAllSamePharmacy = allSamePharmacy(cartItems);
+  const cartTotal = calculateTotal();
+  const deliveryFee = 2000;
+  const serviceFee = 500;
+  const grandTotal = cartTotal + deliveryFee + serviceFee;
 
   if (cartItems.length === 0) {
     return (
@@ -149,7 +204,14 @@ const CartPage: React.FC = () => {
                       <div className="flex justify-between">
                         <div>
                           <h3 className="font-bold text-gray-900">{item.medicament.name}</h3>
-                          <p className="text-sm text-gray-600">{item.medicament.pharmacy.name}</p>
+                          <p className="text-sm text-gray-600">
+                            {item.medicament.pharmacy.name}
+                            {!isAllSamePharmacy && (
+                              <span className="ml-2 px-2 py-0.5 bg-red-100 text-red-800 text-xs rounded-full">
+                                Pharmacie différente
+                              </span>
+                            )}
+                          </p>
                         </div>
                         <button
                           onClick={() => removeItem(item.id)}
@@ -193,6 +255,32 @@ const CartPage: React.FC = () => {
               ))}
             </div>
           </div>
+
+          {/* Avertissement si pharmacies différentes */}
+          {!isAllSamePharmacy && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center">
+                <AlertCircle className="h-5 w-5 text-red-600 mr-3" />
+                <div>
+                  <p className="font-medium text-red-800">
+                    Attention : Vous avez des produits de pharmacies différentes
+                  </p>
+                  <p className="text-sm text-red-700 mt-1">
+                    Pour passer commande, tous les produits doivent provenir de la même pharmacie.
+                    Veuillez supprimer les produits des autres pharmacies.
+                  </p>
+                  <div className="mt-2 text-sm">
+                    <span className="font-medium">Pharmacies dans votre panier:</span>
+                    <ul className="list-disc list-inside mt-1">
+                      {getUniquePharmacyNames(cartItems).map((name, index) => (
+                        <li key={index} className="text-red-700">{name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Récapitulatif */}
@@ -206,21 +294,21 @@ const CartPage: React.FC = () => {
               {/* Détails */}
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-gray-600">
-                  <span>Sous-total</span>
-                  <span>{calculateTotal().toLocaleString()} FCFA</span>
+                  <span>Sous-total ({cartItems.length} article{cartItems.length > 1 ? 's' : ''})</span>
+                  <span>{cartTotal.toLocaleString()} FCFA</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Livraison</span>
-                  <span>2 000 FCFA</span>
+                  <span>{deliveryFee.toLocaleString()} FCFA</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Frais de service</span>
-                  <span>500 FCFA</span>
+                  <span>{serviceFee.toLocaleString()} FCFA</span>
                 </div>
                 <div className="border-t border-gray-200 pt-3">
                   <div className="flex justify-between text-lg font-bold">
                     <span>Total</span>
-                    <span>{(calculateTotal() + 2500).toLocaleString()} FCFA</span>
+                    <span>{grandTotal.toLocaleString()} FCFA</span>
                   </div>
                 </div>
               </div>
@@ -231,6 +319,11 @@ const CartPage: React.FC = () => {
                   <AlertCircle className="h-4 w-4 text-yellow-600 mr-2 mt-0.5 flex-shrink-0" />
                   <p className="text-sm text-yellow-700">
                     Tous les produits doivent être commandés d'une même pharmacie.
+                    {!isAllSamePharmacy && (
+                      <span className="font-medium block mt-1">
+                        Sélectionnez une seule pharmacie pour continuer.
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -238,10 +331,21 @@ const CartPage: React.FC = () => {
               {/* Bouton de commande */}
               <button
                 onClick={handleCheckout}
-                className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 flex items-center justify-center"
+                disabled={!isAllSamePharmacy}
+                className={`w-full py-3 rounded-lg font-medium flex items-center justify-center transition-colors ${
+                  isAllSamePharmacy
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
               >
-                Passer la commande
-                <ArrowRight className="h-5 w-5 ml-2" />
+                {isAllSamePharmacy ? (
+                  <>
+                    Passer la commande
+                    <ArrowRight className="h-5 w-5 ml-2" />
+                  </>
+                ) : (
+                  'Sélectionnez une seule pharmacie'
+                )}
               </button>
 
               {/* Continuer les achats */}

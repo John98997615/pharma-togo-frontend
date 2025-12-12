@@ -15,6 +15,7 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Notification } from '../../types/notification.types';
+import { X } from 'lucide-react';
 
 interface NotificationItemProps {
   notification: Notification;
@@ -198,7 +199,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(notification.data.metadata).map(([key, value]) => (
                     <span key={key} className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                      {key}: {value}
+                      {key}: {String(value)}
                     </span>
                   ))}
                 </div>
@@ -210,8 +211,5 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
     </div>
   );
 };
-
-// Note: Ajouter l'import pour X
-import { X } from 'lucide-react';
 
 export default NotificationItem;

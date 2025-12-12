@@ -1,43 +1,69 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ShoppingCart, Package, CheckCircle, Clock, Truck, XCircle, Filter, Search } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import {
+  ShoppingBag, Package, Truck, CheckCircle, Clock,
+  XCircle, Eye, Download, Filter, Search
+} from 'lucide-react';
 import { commandeService } from '../../../services/api/commande.service';
 import { Commande, CommandeStatus } from '../../../types/commande.types';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+
+// Type pour les filtres
+type FilterStatus = CommandeStatus | 'all';
+
+interface Filters {
+  status: FilterStatus;
+  search: string;
+}
 
 const CommandesPage: React.FC = () => {
-  const [statusFilter, setStatusFilter] = useState<CommandeStatus | 'all'>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-
-  // Récupérer les commandes du client
-  const { data: commandes, isLoading } = useQuery({
-    queryKey: ['client-commandes', statusFilter, searchTerm],
-    queryFn: () => commandeService.getAll({
-      status: statusFilter !== 'all' ? statusFilter : undefined,
-    }),
+  const [filters, setFilters] = useState<Filters>({
+    status: 'all',
+    search: ''
   });
 
-  const getStatusIcon = (status: CommandeStatus) => {
-    switch (status) {
-      case 'en_attente': return <Clock className="h-5 w-5 text-yellow-500" />;
-      case 'confirmee': return <CheckCircle className="h-5 w-5 text-blue-500" />;
-      case 'en_cours': return <Package className="h-5 w-5 text-green-500" />;
-      case 'livree': return <Truck className="h-5 w-5 text-green-600" />;
-      case 'annulee': return <XCircle className="h-5 w-5 text-red-500" />;
-      default: return <ShoppingCart className="h-5 w-5 text-gray-500" />;
+  // Construire les paramètres de requête
+  const getQueryParams = () => {
+    const params: { status?: CommandeStatus } = {};
+    
+    if (filters.status !== 'all') {
+      params.status = filters.status;
+    }
+    
+    return params;
+  };
+
+  const { data: commandes, isLoading, refetch } = useQuery({
+    queryKey: ['client-commandes', filters.status],
+    queryFn: () => commandeService.getAll(getQueryParams()),
+  });
+
+  const handleCancelOrder = async (id: number) => {
+    if (window.confirm('Voulez-vous vraiment annuler cette commande ?')) {
+      try {
+        await commandeService.cancel(id);
+        toast.success('Commande annulée avec succès');
+        refetch();
+      } catch (error: any) {
+        toast.error(error.response?.data?.message || 'Erreur lors de l\'annulation');
+      }
     }
   };
 
-  const getStatusText = (status: CommandeStatus) => {
-    const statusMap = {
-      'en_attente': 'En attente',
-      'confirmee': 'Confirmée',
-      'en_cours': 'En cours',
-      'livree': 'Livrée',
-      'annulee': 'Annulée',
-    };
-    return statusMap[status];
+  const filteredCommandes = commandes?.data?.filter(commande => 
+    filters.search === '' ||
+    commande.numero_commande.toLowerCase().includes(filters.search.toLowerCase()) ||
+    commande.pharmacy?.name.toLowerCase().includes(filters.search.toLowerCase())
+  );
+
+  const getStatusIcon = (status: CommandeStatus) => {
+    switch (status) {
+      case 'en_attente': return <Clock className="h-5 w-5 text-yellow-600" />;
+      case 'confirmee': return <Package className="h-5 w-5 text-blue-600" />;
+      case 'en_cours': return <Truck className="h-5 w-5 text-green-600" />;
+      case 'livree': return <CheckCircle className="h-5 w-5 text-green-600" />;
+      case 'annulee': return <XCircle className="h-5 w-5 text-red-600" />;
+    }
   };
 
   const getStatusColor = (status: CommandeStatus) => {
@@ -47,209 +73,226 @@ const CommandesPage: React.FC = () => {
       case 'en_cours': return 'bg-green-100 text-green-800';
       case 'livree': return 'bg-green-100 text-green-800';
       case 'annulee': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const handleCancelOrder = async (commandeId: number) => {
-    if (window.confirm('Êtes-vous sûr de vouloir annuler cette commande ?')) {
-      try {
-        await commandeService.cancel(commandeId);
-        // Le query client va automatiquement rafraîchir les données
-      } catch (error) {
-        alert('Impossible d\'annuler cette commande');
-      }
+  // Gestionnaire pour le changement de statut
+  const handleStatusChange = (value: string) => {
+    // Valider que la valeur est un statut valide ou 'all'
+    const validStatuses: FilterStatus[] = ['all', 'en_attente', 'confirmee', 'en_cours', 'livree', 'annulee'];
+    
+    if (validStatuses.includes(value as FilterStatus)) {
+      setFilters({...filters, status: value as FilterStatus});
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Mes Commandes</h1>
-        <p className="text-gray-600">Consultez l'historique de vos commandes</p>
+        <h1 className="text-2xl font-bold text-gray-900">Mes Commandes</h1>
+        <p className="text-gray-600">Suivez toutes vos commandes passées</p>
       </div>
 
-      {/* Filtres */}
-      <div className="mb-6 bg-white rounded-xl shadow p-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
+      {/* Filtres et statistiques */}
+      <div className="bg-white rounded-xl shadow p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="md:col-span-2">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Rechercher par numéro de commande..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Rechercher une commande..."
+                className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg"
+                value={filters.search}
+                onChange={(e) => setFilters({...filters, search: e.target.value})}
               />
             </div>
           </div>
-
-          <div className="flex items-center">
-            <Filter className="h-5 w-5 text-gray-400 mr-2" />
+          
+          <div>
             <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as CommandeStatus | 'all')}
-              className="border border-gray-300 rounded-lg px-3 py-2"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              value={filters.status}
+              onChange={(e) => handleStatusChange(e.target.value)}
             >
               <option value="all">Tous les statuts</option>
               <option value="en_attente">En attente</option>
-              <option value="confirmee">Confirmées</option>
+              <option value="confirmee">Confirmée</option>
               <option value="en_cours">En cours</option>
-              <option value="livree">Livrées</option>
-              <option value="annulee">Annulées</option>
+              <option value="livree">Livrée</option>
+              <option value="annulee">Annulée</option>
             </select>
+          </div>
+          
+          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+            Nouvelle commande
+          </button>
+        </div>
+
+        {/* Statistiques */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-blue-50 rounded-lg p-4">
+            <div className="flex items-center">
+              <Clock className="h-8 w-8 text-blue-600 mr-3" />
+              <div>
+                <p className="text-sm text-blue-600">En attente</p>
+                <p className="text-xl font-bold">
+                  {commandes?.data?.filter(c => c.status === 'en_attente').length || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-green-50 rounded-lg p-4">
+            <div className="flex items-center">
+              <Truck className="h-8 w-8 text-green-600 mr-3" />
+              <div>
+                <p className="text-sm text-green-600">En cours</p>
+                <p className="text-xl font-bold">
+                  {commandes?.data?.filter(c => c.status === 'en_cours').length || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-purple-50 rounded-lg p-4">
+            <div className="flex items-center">
+              <CheckCircle className="h-8 w-8 text-purple-600 mr-3" />
+              <div>
+                <p className="text-sm text-purple-600">Livrées</p>
+                <p className="text-xl font-bold">
+                  {commandes?.data?.filter(c => c.status === 'livree').length || 0}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-red-50 rounded-lg p-4">
+            <div className="flex items-center">
+              <ShoppingBag className="h-8 w-8 text-red-600 mr-3" />
+              <div>
+                <p className="text-sm text-red-600">Total</p>
+                <p className="text-xl font-bold">{commandes?.data?.length || 0}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Liste des commandes */}
-      <div className="space-y-6">
-        {isLoading ? (
+      <div className="bg-white rounded-xl shadow overflow-hidden">
+        {filteredCommandes?.length === 0 ? (
           <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Chargement de vos commandes...</p>
-          </div>
-        ) : commandes?.data?.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl shadow">
-            <ShoppingCart className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <p className="text-lg text-gray-600">Vous n'avez pas encore de commandes</p>
-            <p className="text-gray-500">Commencez vos achats dès maintenant !</p>
+            <ShoppingBag className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+            <p className="text-gray-500">Aucune commande trouvée</p>
+            <p className="text-sm text-gray-400">Passez votre première commande !</p>
+            <button className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              Commander maintenant
+            </button>
           </div>
         ) : (
-          commandes?.data?.map((commande: Commande) => (
-            <div key={commande.id} className="bg-white rounded-xl shadow hover:shadow-md transition-shadow">
-              {/* En-tête de la commande */}
-              <div className="p-6 border-b border-gray-100">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="flex items-center space-x-4">
+          <div className="divide-y divide-gray-200">
+            {filteredCommandes?.map((commande) => (
+              <div key={commande.id} className="p-6 hover:bg-gray-50">
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-4">
+                  <div className="flex items-center mb-4 md:mb-0">
                     {getStatusIcon(commande.status)}
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-bold text-lg">Commande {commande.numero_commande}</h3>
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(commande.status)}`}>
-                          {getStatusText(commande.status)}
-                        </span>
-                      </div>
-                      <p className="text-gray-600">
+                    <div className="ml-3">
+                      <h3 className="text-lg font-bold">{commande.numero_commande}</h3>
+                      <p className="text-sm text-gray-500">
                         Pharmacie: {commande.pharmacy?.name}
                       </p>
                     </div>
                   </div>
                   
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-green-600">
+                  <div className="flex items-center space-x-4">
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(commande.status)}`}>
+                      {commande.status.replace('_', ' ')}
+                    </span>
+                    <span className="text-xl font-bold">
                       {commande.total_amount.toLocaleString()} FCFA
-                    </div>
-                    <p className="text-sm text-gray-500">
-                      {format(new Date(commande.created_at), 'dd MMMM yyyy à HH:mm', { locale: fr })}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <p className="text-sm text-gray-500">Date</p>
+                    <p className="font-medium">
+                      {new Date(commande.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Méthode de paiement</p>
+                    <p className="font-medium capitalize">{commande.payment_method}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Statut paiement</p>
+                    <p className={`font-medium ${
+                      commande.payment_status === 'paye' ? 'text-green-600' :
+                      commande.payment_status === 'en_attente' ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
+                      {commande.payment_status}
                     </p>
                   </div>
                 </div>
-              </div>
-
-              {/* Détails de la commande */}
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                  <div>
-                    <h4 className="font-medium text-gray-700 mb-2">Adresse de livraison</h4>
-                    <p className="text-gray-900">{commande.delivery_address}</p>
-                    <p className="text-gray-600">Tél: {commande.delivery_phone}</p>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-medium text-gray-700 mb-2">Paiement</h4>
-                    <div className="space-y-1">
-                      <p className="text-gray-900">Méthode: {commande.payment_method}</p>
-                      <p className={`font-medium ${
-                        commande.payment_status === 'paye' ? 'text-green-600' :
-                        commande.payment_status === 'en_attente' ? 'text-yellow-600' :
-                        'text-red-600'
-                      }`}>
-                        Statut: {commande.payment_status}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-medium text-gray-700 mb-2">Suivi</h4>
-                    {commande.livraison ? (
-                      <div className="space-y-1">
-                        <p className="text-gray-900">N°: {commande.livraison.tracking_number}</p>
-                        <p className="text-gray-600">Statut: {commande.livraison.status}</p>
+                
+                {/* Articles de la commande */}
+                <div className="mb-4">
+                  <p className="text-sm text-gray-500 mb-2">Articles :</p>
+                  <div className="space-y-2">
+                    {commande.items?.map((item, index) => (
+                      <div key={index} className="flex justify-between text-sm">
+                        <span>{item.medicament?.name} x {item.quantity}</span>
+                        <span>{(item.unit_price * item.quantity).toLocaleString()} FCFA</span>
                       </div>
-                    ) : (
-                      <p className="text-gray-500">Aucun suivi disponible</p>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Actions */}
+                <div className="flex justify-between items-center pt-4 border-t">
+                  <div>
+                    <p className="text-sm text-gray-500">
+                      {commande.items?.reduce((sum, item) => sum + item.quantity, 0)} article(s)
+                    </p>
+                  </div>
+                  
+                  <div className="flex space-x-3">
+                    <button className="flex items-center px-3 py-2 text-blue-600 hover:text-blue-800">
+                      <Eye className="h-4 w-4 mr-2" />
+                      Détails
+                    </button>
+                    
+                    {commande.status === 'en_attente' && (
+                      <button
+                        onClick={() => handleCancelOrder(commande.id)}
+                        className="flex items-center px-3 py-2 text-red-600 hover:text-red-800"
+                      >
+                        <XCircle className="h-4 w-4 mr-2" />
+                        Annuler
+                      </button>
+                    )}
+                    
+                    {commande.status === 'livree' && (
+                      <button className="flex items-center px-3 py-2 text-green-600 hover:text-green-800">
+                        <Download className="h-4 w-4 mr-2" />
+                        Télécharger reçu
+                      </button>
                     )}
                   </div>
                 </div>
-
-                {/* Articles de la commande */}
-                <div className="border-t border-gray-100 pt-6">
-                  <h4 className="font-medium text-gray-700 mb-4">Articles commandés</h4>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead>
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Médicament</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Prix unitaire</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantité</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sous-total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
-                        {commande.items.map((item) => (
-                          <tr key={item.id}>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center">
-                                {item.medicament?.image && (
-                                  <img
-                                    src={`${process.env.REACT_APP_API_URL}/storage/${item.medicament.image}`}
-                                    alt={item.medicament.name}
-                                    className="h-10 w-10 rounded mr-3"
-                                  />
-                                )}
-                                <div>
-                                  <div className="font-medium">{item.medicament?.name}</div>
-                                  <div className="text-sm text-gray-500">{item.medicament?.dosage}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3">{item.unit_price.toLocaleString()} FCFA</td>
-                            <td className="px-4 py-3">{item.quantity}</td>
-                            <td className="px-4 py-3 font-medium">
-                              {(item.unit_price * item.quantity).toLocaleString()} FCFA
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="mt-6 pt-6 border-t border-gray-100 flex justify-between items-center">
-                  {commande.status === 'en_attente' && (
-                    <button
-                      onClick={() => handleCancelOrder(commande.id)}
-                      className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200"
-                    >
-                      Annuler la commande
-                    </button>
-                  )}
-                  
-                  <div className="flex space-x-3">
-                    <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
-                      Télécharger la facture
-                    </button>
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                      Voir les détails
-                    </button>
-                  </div>
-                </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
     </div>

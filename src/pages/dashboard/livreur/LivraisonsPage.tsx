@@ -1,239 +1,305 @@
+// src/pages/dashboard/livreur/LivraisonsPage.tsx
 import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Truck, MapPin, Clock, CheckCircle, XCircle, Filter, Search, Navigation } from 'lucide-react';
-import { livraisonService } from '../../../services/api/livraison.service';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import { format } from 'date-fns';
+import {
+  Truck, Package, CheckCircle, Clock, MapPin,
+  User, Phone, DollarSign, Filter, Search,
+  Navigation
+} from 'lucide-react';
+import { livraisonService } from '../../../services/api/livraison.service';
+import { Livraison, LivraisonStatus } from '../../../types/livraison.types';
+
+// Type pour les filtres
+interface Filters {
+  status: LivraisonStatus | 'all';
+  search: string;
+  date: string;
+}
+
+// Type pour les items de commande
+interface CommandeItem {
+  id: number;
+  medicament?: {
+    name: string;
+  };
+  quantity: number;
+  unit_price: number;
+}
 
 const LivraisonsPage: React.FC = () => {
-  const queryClient = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [searchTerm, setSearchTerm] = useState('');
-
-  // Récupérer les livraisons
-  const { data: livraisons, isLoading } = useQuery({
-    queryKey: ['livreur-livraisons', statusFilter, searchTerm],
-    queryFn: () => livraisonService.getAll({
-      status: statusFilter !== 'all' ? statusFilter : undefined,
-    }),
+  const [filters, setFilters] = useState<Filters>({
+    status: 'all',
+    search: '',
+    date: ''
   });
 
-  // Mutation pour mettre à jour le statut
-  const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) =>
-      livraisonService.updateStatus(id, status),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['livreur-livraisons'] });
-      toast.success('Statut mis à jour');
-    },
-    onError: (error: any) => {
+  // Construire les paramètres de requête
+  const getQueryParams = () => {
+    const params: { status?: LivraisonStatus } = {};
+    
+    if (filters.status !== 'all') {
+      params.status = filters.status;
+    }
+    
+    return params;
+  };
+
+  const { data: livraisons, isLoading, refetch } = useQuery({
+    queryKey: ['livreur-all-livraisons', filters.status],
+    queryFn: () => livraisonService.getAll(getQueryParams()),
+  });
+
+  const handleUpdateStatus = async (livraisonId: number, newStatus: LivraisonStatus) => {
+    try {
+      await livraisonService.updateStatus(livraisonId, newStatus);
+      toast.success('Statut mis à jour avec succès');
+      refetch();
+    } catch (error: any) {
       toast.error(error.response?.data?.message || 'Erreur lors de la mise à jour');
-    },
-  });
-
-  const handleUpdateStatus = (id: number, status: string) => {
-    if (window.confirm(`Changer le statut en "${status}" ?`)) {
-      updateStatusMutation.mutate({ id, status });
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      'en_attente': { color: 'bg-yellow-100 text-yellow-800', icon: Clock },
-      'en_cours': { color: 'bg-blue-100 text-blue-800', icon: Navigation },
-      'livree': { color: 'bg-green-100 text-green-800', icon: CheckCircle },
-      'annulee': { color: 'bg-red-100 text-red-800', icon: XCircle },
-    };
+  // Gestionnaire pour le changement de statut
+  const handleStatusChange = (value: string) => {
+    const validStatuses: Array<LivraisonStatus | 'all'> = ['all', 'en_attente', 'en_cours', 'livree', 'annulee'];
     
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.en_attente;
-    const Icon = config.icon;
-    
-    return (
-      <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.color} flex items-center`}>
-        <Icon className="h-4 w-4 mr-1" />
-        {status}
-      </span>
-    );
+    if (validStatuses.includes(value as any)) {
+      setFilters({...filters, status: value as LivraisonStatus | 'all'});
+    }
   };
+
+  const filteredLivraisons = livraisons?.filter(livraison => {
+    const matchesSearch = filters.search === '' ||
+      livraison.tracking_number.toLowerCase().includes(filters.search.toLowerCase()) ||
+      livraison.commande?.user?.name.toLowerCase().includes(filters.search.toLowerCase()) ||
+      livraison.delivery_address.toLowerCase().includes(filters.search.toLowerCase());
+    
+    return matchesSearch;
+  });
+
+  const getStatusColor = (status: LivraisonStatus) => {
+    switch (status) {
+      case 'en_attente': return 'bg-yellow-100 text-yellow-800';
+      case 'en_cours': return 'bg-blue-100 text-blue-800';
+      case 'livree': return 'bg-green-100 text-green-800';
+      case 'annulee': return 'bg-red-100 text-red-800';
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Mes Livraisons</h1>
-        <p className="text-gray-600">Gérez et suivez vos livraisons</p>
+        <h1 className="text-2xl font-bold text-gray-900">Gestion des Livraisons</h1>
+        <p className="text-gray-600">Suivez et gérez toutes vos livraisons</p>
       </div>
 
       {/* Filtres */}
-      <div className="mb-6 bg-white rounded-xl shadow p-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
+      <div className="bg-white rounded-xl shadow p-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="md:col-span-2">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Rechercher par numéro de suivi..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Rechercher une livraison..."
+                className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg"
+                value={filters.search}
+                onChange={(e) => setFilters({...filters, search: e.target.value})}
               />
             </div>
           </div>
-
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center">
-              <Filter className="h-5 w-5 text-gray-400 mr-2" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2"
-              >
-                <option value="all">Tous les statuts</option>
-                <option value="en_attente">En attente</option>
-                <option value="en_cours">En cours</option>
-                <option value="livree">Livrées</option>
-                <option value="annulee">Annulées</option>
-              </select>
-            </div>
+          
+          <div>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              value={filters.status}
+              onChange={(e) => handleStatusChange(e.target.value)}
+            >
+              <option value="all">Tous les statuts</option>
+              <option value="en_attente">En attente</option>
+              <option value="en_cours">En cours</option>
+              <option value="livree">Livrée</option>
+              <option value="annulee">Annulée</option>
+            </select>
+          </div>
+          
+          <div>
+            <input
+              type="date"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              value={filters.date}
+              onChange={(e) => setFilters({...filters, date: e.target.value})}
+            />
           </div>
         </div>
       </div>
 
       {/* Liste des livraisons */}
-      <div className="space-y-6">
-        {isLoading ? (
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Chargement des livraisons...</p>
-          </div>
-        ) : livraisons?.data?.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl shadow">
-            <Truck className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-            <p className="text-lg text-gray-600">Aucune livraison trouvée</p>
-          </div>
-        ) : (
-          livraisons?.data?.map((livraison: any) => (
-            <div key={livraison.id} className="bg-white rounded-xl shadow hover:shadow-md transition-shadow">
-              <div className="p-6">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                  <div className="flex items-center space-x-4">
-                    <Truck className="h-8 w-8 text-blue-500" />
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <h3 className="font-bold text-lg">Livraison {livraison.tracking_number}</h3>
-                        {getStatusBadge(livraison.status)}
-                      </div>
-                      <p className="text-gray-600">
-                        Commande: {livraison.commande?.numero_commande}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="text-sm text-gray-500">
-                    Créée le {format(new Date(livraison.created_at), 'dd/MM/yyyy à HH:mm')}
-                  </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {filteredLivraisons?.map((livraison) => (
+          <div key={livraison.id} className="bg-white rounded-xl shadow p-6">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <div className="flex items-center mb-2">
+                  <Truck className="h-5 w-5 mr-2 text-blue-600" />
+                  <h3 className="font-bold text-lg">#{livraison.tracking_number}</h3>
                 </div>
-
-                {/* Détails de la livraison */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div>
-                    <h4 className="font-medium text-gray-700 mb-2">Adresse de livraison</h4>
-                    <div className="flex items-start">
-                      <MapPin className="h-5 w-5 text-gray-400 mr-2 mt-0.5" />
-                      <div>
-                        <p className="text-gray-900">{livraison.delivery_address}</p>
-                        {livraison.delivery_lat && livraison.delivery_lng && (
-                          <p className="text-sm text-gray-500 mt-1">
-                            Coordonnées: {livraison.delivery_lat}, {livraison.delivery_lng}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-medium text-gray-700 mb-2">Informations client</h4>
-                    <div className="space-y-1">
-                      <p className="text-gray-900">{livraison.commande?.user?.name}</p>
-                      <p className="text-gray-600">Tél: {livraison.commande?.delivery_phone}</p>
-                      <p className="text-gray-600">Montant: {livraison.commande?.total_amount?.toLocaleString()} FCFA</p>
-                    </div>
-                  </div>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(livraison.status)}`}>
+                  {livraison.status.replace('_', ' ')}
+                </span>
+              </div>
+              
+              <div className="text-right">
+                <p className="text-sm text-gray-500">Commande</p>
+                <p className="font-bold">{livraison.commande?.numero_commande}</p>
+              </div>
+            </div>
+            
+            {/* Informations client */}
+            <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center mb-2">
+                <User className="h-4 w-4 mr-2 text-gray-500" />
+                <span className="font-medium">{livraison.commande?.user?.name}</span>
+              </div>
+              <div className="flex items-center">
+                <Phone className="h-4 w-4 mr-2 text-gray-500" />
+                <span>{livraison.commande?.delivery_phone || livraison.commande?.user?.phone}</span>
+              </div>
+            </div>
+            
+            {/* Adresse de livraison */}
+            <div className="mb-4">
+              <div className="flex items-center mb-2">
+                <MapPin className="h-5 w-5 mr-2 text-red-500" />
+                <h4 className="font-bold">Adresse de livraison</h4>
+              </div>
+              <p className="text-gray-700">{livraison.delivery_address}</p>
+              {livraison.delivery_lat && livraison.delivery_lng && (
+                <button className="mt-2 flex items-center text-blue-600 hover:text-blue-800 text-sm">
+                  <Navigation className="h-4 w-4 mr-1" />
+                  Voir sur la carte
+                </button>
+              )}
+            </div>
+            
+            {/* Détails commande */}
+            <div className="mb-4">
+              <h4 className="font-bold mb-2">Détails de la commande</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-500">Pharmacie</p>
+                  <p className="font-medium">{livraison.commande?.pharmacy?.name}</p>
                 </div>
-
-                {/* Informations de suivi */}
-                <div className="border-t border-gray-100 pt-6">
-                  <h4 className="font-medium text-gray-700 mb-4">Suivi de la livraison</h4>
-                  <div className="flex flex-wrap gap-4">
-                    {livraison.estimated_delivery_time && (
-                      <div className="bg-blue-50 rounded-lg p-3">
-                        <p className="text-sm text-gray-600">Livraison estimée</p>
-                        <p className="font-medium">
-                          {format(new Date(livraison.estimated_delivery_time), 'dd/MM/yyyy à HH:mm')}
-                        </p>
-                      </div>
-                    )}
-                    
-                    {livraison.actual_delivery_time && (
-                      <div className="bg-green-50 rounded-lg p-3">
-                        <p className="text-sm text-gray-600">Livrée le</p>
-                        <p className="font-medium">
-                          {format(new Date(livraison.actual_delivery_time), 'dd/MM/yyyy à HH:mm')}
-                        </p>
-                      </div>
-                    )}
-                    
-                    {livraison.delivery_time && (
-                      <div className="bg-purple-50 rounded-lg p-3">
-                        <p className="text-sm text-gray-600">Temps de livraison</p>
-                        <p className="font-medium">{livraison.delivery_time}</p>
-                      </div>
-                    )}
-                  </div>
+                <div>
+                  <p className="text-sm text-gray-500">Montant total</p>
+                  <p className="font-bold flex items-center">
+                    <DollarSign className="h-4 w-4 mr-1" />
+                    {livraison.commande?.total_amount.toLocaleString()} FCFA
+                  </p>
                 </div>
-
-                {/* Actions */}
-                <div className="mt-6 pt-6 border-t border-gray-100">
-                  <div className="flex flex-wrap gap-3">
-                    {livraison.status === 'en_attente' && (
-                      <button
-                        onClick={() => handleUpdateStatus(livraison.id, 'en_cours')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                      >
-                        Démarrer la livraison
-                      </button>
-                    )}
-                    
-                    {livraison.status === 'en_cours' && (
-                      <>
-                        <button
-                          onClick={() => handleUpdateStatus(livraison.id, 'livree')}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                        >
-                          Marquer comme livrée
-                        </button>
-                        <button
-                          onClick={() => handleUpdateStatus(livraison.id, 'annulee')}
-                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                        >
-                          Annuler la livraison
-                        </button>
-                      </>
-                    )}
-                    
-                    <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
-                      Voir sur la carte
-                    </button>
-                    
-                    <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
-                      Détails de la commande
-                    </button>
-                  </div>
+              </div>
+              
+              {/* Articles */}
+              <div className="mt-3">
+                <p className="text-sm text-gray-500 mb-1">Articles :</p>
+                <div className="space-y-1">
+                  {livraison.commande?.items?.slice(0, 3).map((item: CommandeItem, index: number) => (
+                    <div key={index} className="flex justify-between text-sm">
+                      <span>{item.medicament?.name} x {item.quantity}</span>
+                      <span>{(item.unit_price * item.quantity).toLocaleString()} FCFA</span>
+                    </div>
+                  ))}
+                  {livraison.commande?.items && livraison.commande.items.length > 3 && (
+                    <p className="text-sm text-gray-500">
+                      + {livraison.commande.items.length - 3} autres articles
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
-          ))
-        )}
+            
+            {/* Horaires */}
+            <div className="mb-4 grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-500">Heure estimée</p>
+                <p className="font-medium">
+                  {livraison.estimated_delivery_time 
+                    ? new Date(livraison.estimated_delivery_time).toLocaleTimeString()
+                    : 'Non spécifiée'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Heure réelle</p>
+                <p className="font-medium">
+                  {livraison.actual_delivery_time 
+                    ? new Date(livraison.actual_delivery_time).toLocaleTimeString()
+                    : livraison.status === 'livree' ? 'Non enregistrée' : 'Non livrée'}
+                </p>
+              </div>
+            </div>
+            
+            {/* Actions */}
+            <div className="flex space-x-2">
+              {livraison.status === 'en_cours' && (
+                <>
+                  <button
+                    onClick={() => handleUpdateStatus(livraison.id, 'livree')}
+                    className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+                  >
+                    <CheckCircle className="inline h-4 w-4 mr-2" />
+                    Marquer comme livré
+                  </button>
+                  <button
+                    onClick={() => handleUpdateStatus(livraison.id, 'annulee')}
+                    className="flex-1 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+                  >
+                    Annuler
+                  </button>
+                </>
+              )}
+              
+              {livraison.status === 'en_attente' && (
+                <button
+                  onClick={() => handleUpdateStatus(livraison.id, 'en_cours')}
+                  className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  Commencer la livraison
+                </button>
+              )}
+              
+              {livraison.status === 'livree' && (
+                <button
+                  className="flex-1 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium"
+                  disabled
+                >
+                  Livraison terminée
+                </button>
+              )}
+              
+              <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+                Détails
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
+      
+      {filteredLivraisons?.length === 0 && (
+        <div className="text-center py-12 bg-white rounded-xl shadow">
+          <Truck className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+          <p className="text-gray-500">Aucune livraison trouvée</p>
+          <p className="text-sm text-gray-400">Essayez de modifier vos filtres</p>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,12 +1,12 @@
 // src/layouts/DashboardLayout.tsx
 import React, { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Building, 
-  Package, 
-  ShoppingCart, 
+import {
+  LayoutDashboard,
+  Users,
+  Building,
+  Package,
+  ShoppingCart,
   Truck,
   BarChart3,
   Settings,
@@ -23,19 +23,28 @@ import { useNotifications } from '../context/NotificationContext';
 import NotificationBell from '../components/notifications/NotificationBell';
 import { UserRole } from '../types/user.types';
 
+// Définir le type pour les items de navigation
+interface NavigationItem {
+  name: string;
+  icon: React.ElementType;
+  path: string;
+  exact?: boolean; // La propriété exact est optionnelle
+}
+
 interface DashboardLayoutProps {
+  children: React.ReactNode;
   role: UserRole;
 }
 
-const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role }) => {
+const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children, role }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const getNavigationItems = () => {
-    const commonItems = [
+  const getNavigationItems = (): NavigationItem[] => {
+    const commonItems: NavigationItem[] = [
       { name: 'Tableau de bord', icon: LayoutDashboard, path: `/${role}`, exact: true },
     ];
 
@@ -48,7 +57,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role }) => {
           { name: 'Statistiques', icon: BarChart3, path: '/admin/statistics' },
           { name: 'Paramètres', icon: Settings, path: '/admin/settings' },
         ];
-      
+
       case 'pharmacien':
         return [
           ...commonItems,
@@ -56,7 +65,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role }) => {
           { name: 'Commandes', icon: ShoppingCart, path: '/pharmacien/commandes' },
           { name: 'Paramètres', icon: Settings, path: '/pharmacien/settings' },
         ];
-      
+
       case 'client':
         return [
           ...commonItems,
@@ -64,7 +73,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role }) => {
           { name: 'Mon Panier', icon: Package, path: '/client/cart' },
           { name: 'Mon Profil', icon: User, path: '/client/profile' },
         ];
-      
+
       case 'livreur':
         return [
           ...commonItems,
@@ -72,7 +81,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role }) => {
           { name: 'Carte', icon: LayoutDashboard, path: '/livreur/map' },
           { name: 'Mon Profil', icon: User, path: '/livreur/profile' },
         ];
-      
+
       default:
         return commonItems;
     }
@@ -89,7 +98,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role }) => {
     }
   };
 
-  const isActive = (path: string, exact: boolean = false) => {
+  const isActive = (path: string, exact?: boolean) => {
     if (exact) {
       return location.pathname === path;
     }
@@ -101,7 +110,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role }) => {
       {/* Barre latérale pour mobile */}
       <div className={`fixed inset-0 z-40 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
         <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)}></div>
-        
+
         <div className="fixed inset-y-0 left-0 flex flex-col w-64 bg-white shadow-xl z-50">
           {/* En-tête sidebar mobile */}
           <div className="flex items-center justify-between p-4 border-b border-gray-200">
@@ -130,11 +139,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role }) => {
                   key={item.name}
                   to={item.path}
                   onClick={() => setSidebarOpen(false)}
-                  className={`flex items-center px-3 py-2 rounded-lg ${
-                    isActive(item.path, item.exact)
+                  className={`flex items-center px-3 py-2 rounded-lg ${isActive(item.path, item.exact)
                       ? 'bg-blue-100 text-blue-700'
                       : 'text-gray-700 hover:bg-gray-100'
-                  }`}
+                    }`}
                 >
                   <item.icon className="h-5 w-5 mr-3" />
                   {item.name}
@@ -178,11 +186,10 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role }) => {
               <Link
                 key={item.name}
                 to={item.path}
-                className={`flex items-center px-3 py-2 rounded-lg ${
-                  isActive(item.path, item.exact)
+                className={`flex items-center px-3 py-2 rounded-lg ${isActive(item.path, item.exact)
                     ? 'bg-blue-100 text-blue-700 font-medium'
                     : 'text-gray-700 hover:bg-gray-100'
-                }`}
+                  }`}
               >
                 <item.icon className="h-5 w-5 mr-3" />
                 {item.name}
@@ -251,6 +258,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ role }) => {
 
         {/* Contenu */}
         <main className="py-6">
+          {children}
           <div className="px-4 sm:px-6 lg:px-8">
             <Outlet />
           </div>

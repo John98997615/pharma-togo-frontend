@@ -1,9 +1,9 @@
 // src/components/auth/RegisterForm.tsx
-import React from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { User, Mail, Phone, MapPin, Lock, AlertCircle } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Lock, AlertCircle, Upload } from 'lucide-react';
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Le nom doit contenir au moins 2 caractères'),
@@ -13,7 +13,6 @@ const registerSchema = z.object({
   address: z.string().min(5, 'Adresse requise'),
   password: z.string().min(6, 'Le mot de passe doit contenir au moins 6 caractères'),
   password_confirmation: z.string(),
-  photo: z.any().optional(),
 }).refine((data) => data.password === data.password_confirmation, {
   message: "Les mots de passe ne correspondent pas",
   path: ["password_confirmation"],
@@ -22,12 +21,15 @@ const registerSchema = z.object({
 type RegisterFormData = z.infer<typeof registerSchema>;
 
 interface RegisterFormProps {
-  onSubmit: (data: RegisterFormData) => Promise<void>;
+  onSubmit: (data: RegisterFormData & { photo?: File | null }) => Promise<void>;
   isLoading: boolean;
   error?: string;
 }
 
 const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error }) => {
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  
   const {
     register,
     handleSubmit,
@@ -39,8 +41,41 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error 
     },
   });
 
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPhotoFile(file);
+      
+      // Créer une prévisualisation
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setPhotoFile(null);
+      setPhotoPreview(null);
+    }
+  };
+
+  const handleFormSubmit = async (data: RegisterFormData) => {
+    const formData = {
+      ...data,
+      photo: photoFile
+    };
+    await onSubmit(formData);
+  };
+
+  const removePhoto = () => {
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    // Réinitialiser l'input file
+    const fileInput = document.getElementById('photo') as HTMLInputElement;
+    if (fileInput) fileInput.value = '';
+  };
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center">
@@ -50,10 +85,31 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error 
         </div>
       )}
 
+      {/* Prévisualisation de la photo */}
+      {photoPreview && (
+        <div className="flex flex-col items-center">
+          <div className="relative">
+            <img
+              src={photoPreview}
+              alt="Aperçu"
+              className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
+            />
+            <button
+              type="button"
+              onClick={removePhoto}
+              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600"
+            >
+              ×
+            </button>
+          </div>
+          <p className="text-sm text-gray-500 mt-2">Photo sélectionnée</p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-            Nom complet
+            Nom complet *
           </label>
           <div className="relative">
             <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -72,7 +128,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error 
 
         <div>
           <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-            Adresse email
+            Email *
           </label>
           <div className="relative">
             <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -91,7 +147,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error 
 
         <div>
           <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-            Téléphone
+            Téléphone *
           </label>
           <div className="relative">
             <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -110,7 +166,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error 
 
         <div>
           <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
-            Rôle
+            Rôle *
           </label>
           <select
             {...register('role')}
@@ -129,7 +185,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error 
 
         <div className="md:col-span-2">
           <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
-            Adresse
+            Adresse *
           </label>
           <div className="relative">
             <MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
@@ -148,7 +204,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error 
 
         <div>
           <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-            Mot de passe
+            Mot de passe *
           </label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -167,7 +223,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error 
 
         <div>
           <label htmlFor="password_confirmation" className="block text-sm font-medium text-gray-700 mb-2">
-            Confirmer le mot de passe
+            Confirmer le mot de passe *
           </label>
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -188,13 +244,49 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error 
           <label htmlFor="photo" className="block text-sm font-medium text-gray-700 mb-2">
             Photo de profil (optionnel)
           </label>
-          <input
-            {...register('photo')}
-            type="file"
-            id="photo"
-            accept="image/*"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
+          <div className="mt-1 flex items-center">
+            <label
+              htmlFor="photo"
+              className="cursor-pointer flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <Upload className="h-5 w-5 mr-2" />
+              {photoFile ? `Photo sélectionnée: ${photoFile.name}` : 'Choisir une photo'}
+            </label>
+            <input
+              type="file"
+              id="photo"
+              accept="image/*"
+              onChange={handlePhotoChange}
+              className="sr-only"
+            />
+            {photoFile && (
+              <button
+                type="button"
+                onClick={removePhoto}
+                className="ml-3 text-sm text-red-600 hover:text-red-800"
+              >
+                Supprimer
+              </button>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            Formats acceptés: JPG, PNG, GIF. Taille max: 2MB
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <div className="ml-3">
+            <p className="text-sm text-blue-700">
+              Les champs marqués d'un * sont obligatoires.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -220,3 +312,4 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error 
 };
 
 export default RegisterForm;
+export type { RegisterFormData };

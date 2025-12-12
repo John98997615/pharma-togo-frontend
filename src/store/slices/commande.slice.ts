@@ -27,10 +27,18 @@ const initialState: CommandeState = {
   },
 };
 
+interface FetchCommandesParams {
+  status?: string;
+  pharmacy_id?: number;
+  date_from?: string;
+  date_to?: string;
+  per_page?: number;
+}
+
 // Thunks asynchrones
 export const fetchCommandes = createAsyncThunk(
   'commandes/fetchCommandes',
-  async (params?: any, { rejectWithValue }) => {
+  async (params: any = {}, { rejectWithValue }) => {
     try {
       const response = await commandeService.getAll(params);
       return response;

@@ -15,8 +15,7 @@ interface CommandeStatusProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
-const CommandeStatus: React.FC<CommandeStatusProps> = ({ status, size = 'md' }) => {
-  const config = {
+  const STATUS_CONFIG = {
     en_attente: {
       icon: Clock,
       label: 'En attente',
@@ -49,7 +48,9 @@ const CommandeStatus: React.FC<CommandeStatusProps> = ({ status, size = 'md' }) 
     },
   };
 
-  const { icon: Icon, label, color, iconColor } = config[status];
+  const CommandeStatus: React.FC<CommandeStatusProps> = ({ status, size = 'md' }) => {
+  const { icon: Icon, label, color, iconColor } = STATUS_CONFIG[status];
+
   const sizeClasses = {
     sm: 'px-2 py-1 text-xs',
     md: 'px-3 py-1.5 text-sm',
@@ -111,7 +112,7 @@ export const CommandeProgress: React.FC<{ status: CommandeStatusType }> = ({ sta
       </div>
       <div className="mt-4 text-center">
         <p className="text-sm text-gray-600">
-          Statut actuel: <span className="font-bold">{config[status].label}</span>
+          Statut actuel: <span className="font-bold">{STATUS_CONFIG[status].label}</span>
         </p>
       </div>
     </div>

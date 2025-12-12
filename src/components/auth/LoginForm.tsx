@@ -29,6 +29,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, isLoading, error }) => 
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+    @csrf
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center">

@@ -8,6 +8,7 @@ import { commandeService } from '../../../services/api/commande.service';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { CommandeStatus } from '../../../types/commande.types';
 
 const CommandesManagement: React.FC = () => {
   const queryClient = useQueryClient();
@@ -19,13 +20,13 @@ const CommandesManagement: React.FC = () => {
   const { data: commandes, isLoading } = useQuery({
     queryKey: ['pharmacien-commandes', statusFilter, searchTerm],
     queryFn: () => commandeService.getAll({
-      status: statusFilter !== 'all' ? statusFilter : undefined,
+      status: statusFilter !== 'all' ? (statusFilter as CommandeStatus) : undefined,
     }),
   });
 
   // Mutation pour mettre à jour le statut
   const updateStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) =>
+     mutationFn: ({ id, status }: { id: number; status: CommandeStatus }) =>
       commandeService.updateStatus(id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pharmacien-commandes'] });
@@ -36,8 +37,8 @@ const CommandesManagement: React.FC = () => {
     },
   });
 
-  const handleUpdateStatus = (id: number, status: string) => {
-    if (window.confirm(`Changer le statut en "${status}" ?`)) {
+  const handleUpdateStatus = (id: number, status: CommandeStatus) => {
+    if (window.confirm(`Changer le statut en "${getStatusText(status)}" ?`)) {
       updateStatusMutation.mutate({ id, status });
     }
   };

@@ -5,6 +5,7 @@ import { Search, Shield, Truck, Clock, Star } from 'lucide-react';
 import { motion } from 'framer-motion';
 import PharmacyList from '../../components/pharmacies/PharmacyList';
 import MedicamentList from '../../components/medicaments/MedicamentList';
+import PopularMedicaments from '../../components/medicaments/PopularMedicaments';
 
 const HomePage: React.FC = () => {
   const features = [
@@ -119,7 +120,7 @@ const HomePage: React.FC = () => {
               Voir tous →
             </Link>
           </div>
-          <MedicamentList limit={8} />
+          <PopularMedicaments limit={8} />
         </div>
       </section>
 
