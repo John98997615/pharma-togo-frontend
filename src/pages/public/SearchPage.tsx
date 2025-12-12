@@ -28,7 +28,7 @@ const SearchPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [searchType, setSearchType] = useState<'medicaments' | 'pharmacies'>('medicaments');
-  
+
   const initialFilters: SearchFilters = {
     query: searchParams.get('q') || '',
     category: searchParams.get('category') || '',
@@ -42,9 +42,9 @@ const SearchPage: React.FC = () => {
   const [filters, setFilters] = useState<SearchFilters>(initialFilters);
 
   // Récupérer les résultats de recherche pour les médicaments
-  const { 
-    data: medicamentsResponse, 
-    isLoading: medicamentsLoading 
+  const {
+    data: medicamentsResponse,
+    isLoading: medicamentsLoading
   } = useQuery({
     queryKey: ['search-medicaments', filters.query, filters.category, filters.minPrice, filters.maxPrice],
     queryFn: () => {
@@ -53,16 +53,16 @@ const SearchPage: React.FC = () => {
       if (filters.category) params.category_id = parseInt(filters.category);
       if (filters.minPrice) params.min_price = parseFloat(filters.minPrice);
       if (filters.maxPrice) params.max_price = parseFloat(filters.maxPrice);
-      
+
       return medicamentService.getAll(params);
     },
     enabled: searchType === 'medicaments',
   });
 
   // Récupérer les résultats de recherche pour les pharmacies
-  const { 
-    data: pharmaciesResponse, 
-    isLoading: pharmaciesLoading 
+  const {
+    data: pharmaciesResponse,
+    isLoading: pharmaciesLoading
   } = useQuery({
     queryKey: ['search-pharmacies', filters.query, filters.garde, filters.openNow],
     queryFn: () => {
@@ -70,16 +70,16 @@ const SearchPage: React.FC = () => {
       if (filters.query) params.search = filters.query;
       if (filters.garde) params.garde = true;
       if (filters.openNow) params.open_now = true;
-      
+
       return pharmacyService.getAll(params);
     },
     enabled: searchType === 'pharmacies',
   });
 
   // Récupérer les catégories
-  const { 
-    data: categoriesResponse, 
-    isLoading: categoriesLoading 
+  const {
+    data: categoriesResponse,
+    isLoading: categoriesLoading
   } = useQuery({
     queryKey: ['categories'],
     queryFn: () => categoryService.getAll(),
@@ -88,68 +88,69 @@ const SearchPage: React.FC = () => {
   // Extraire les données des réponses de manière sécurisée
   const medicaments: Medicament[] = (() => {
     if (!medicamentsResponse) return [];
-    
+
     // Si la réponse a une propriété 'data', utilisez-la
     if (Array.isArray(medicamentsResponse)) {
       return medicamentsResponse;
     }
-    
+
     if (medicamentsResponse && typeof medicamentsResponse === 'object' && 'data' in medicamentsResponse) {
       const response = medicamentsResponse as { data?: Medicament[] | any };
       if (Array.isArray(response.data)) {
         return response.data;
       }
     }
-    
+
     return [];
   })();
 
   const pharmacies: Pharmacy[] = (() => {
     if (!pharmaciesResponse) return [];
-    
+
     if (Array.isArray(pharmaciesResponse)) {
       return pharmaciesResponse;
     }
-    
+
     if (pharmaciesResponse && typeof pharmaciesResponse === 'object' && 'data' in pharmaciesResponse) {
       const response = pharmaciesResponse as { data?: Pharmacy[] | any };
       if (Array.isArray(response.data)) {
         return response.data;
       }
     }
-    
+
     return [];
   })();
+
 
   // Gestion sécurisée des catégories
   const categories: Category[] = (() => {
     if (categoriesLoading) return [];
     if (!categoriesResponse) return [];
-    
+
     if (Array.isArray(categoriesResponse)) {
       return categoriesResponse;
     }
-    
+
     if (categoriesResponse && typeof categoriesResponse === 'object') {
       // Essayez différentes structures de réponse
-      if ('data' in categoriesResponse && Array.isArray(categoriesResponse.data)) {
-        return categoriesResponse.data;
+      if ('data' in categoriesResponse && Array.isArray((categoriesResponse as any).data)) {
+        return (categoriesResponse as any).data;
       }
-      
+
       // Si c'est un objet avec des propriétés qui ressemblent à un tableau
       const values = Object.values(categoriesResponse);
       if (values.length > 0 && Array.isArray(values[0])) {
-        return values[0];
+        return values[0] as Category[];
       }
     }
-    
+
     return [];
   })();
 
   // Mettre à jour les paramètres d'URL
   useEffect(() => {
     const params = new URLSearchParams();
-    
+
     if (filters.query.trim()) params.set('q', filters.query.trim());
     if (filters.category.trim()) params.set('category', filters.category.trim());
     if (filters.location.trim()) params.set('location', filters.location.trim());
@@ -157,7 +158,7 @@ const SearchPage: React.FC = () => {
     if (filters.maxPrice.trim()) params.set('maxPrice', filters.maxPrice.trim());
     if (filters.garde) params.set('garde', 'true');
     if (filters.openNow) params.set('openNow', 'true');
-    
+
     // Ne mettre à jour que si les paramètres ont changé
     if (params.toString() !== searchParams.toString()) {
       setSearchParams(params);
@@ -217,8 +218,8 @@ const SearchPage: React.FC = () => {
     : pharmacies;
 
   const isLoading = searchType === 'medicaments' ? medicamentsLoading : pharmaciesLoading;
-  const resultsCount = searchType === 'medicaments' 
-    ? medicaments.length 
+  const resultsCount = searchType === 'medicaments'
+    ? medicaments.length
     : filteredPharmacies.length;
 
   // Fonction pour afficher les options de catégorie
@@ -256,8 +257,8 @@ const SearchPage: React.FC = () => {
                   type="button"
                   onClick={() => setSearchType('medicaments')}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${searchType === 'medicaments'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                 >
                   Médicaments
@@ -266,8 +267,8 @@ const SearchPage: React.FC = () => {
                   type="button"
                   onClick={() => setSearchType('pharmacies')}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${searchType === 'pharmacies'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                 >
                   Pharmacies
@@ -437,8 +438,8 @@ const SearchPage: React.FC = () => {
         ) : searchType === 'medicaments' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {medicaments.map((medicament) => (
-              <div 
-                key={medicament.id} 
+              <div
+                key={medicament.id}
                 className="bg-white rounded-xl shadow hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
               >
                 <div className="p-6">
@@ -475,13 +476,12 @@ const SearchPage: React.FC = () => {
                     <span className="text-xl font-bold text-green-600">
                       {medicament.price?.toLocaleString('fr-FR') || '0'} FCFA
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                      medicament.quantity > 10 
-                        ? 'bg-green-100 text-green-800' 
-                        : medicament.quantity > 0 
-                        ? 'bg-yellow-100 text-yellow-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${medicament.quantity > 10
+                        ? 'bg-green-100 text-green-800'
+                        : medicament.quantity > 0
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
                       {medicament.quantity > 0 ? 'En stock' : 'Rupture'}
                     </span>
                   </div>
@@ -490,16 +490,15 @@ const SearchPage: React.FC = () => {
                     <button
                       onClick={() => handleAddToCart(medicament)}
                       disabled={medicament.quantity === 0}
-                      className={`flex-1 py-2 rounded-lg font-medium transition-colors flex items-center justify-center ${
-                        medicament.quantity === 0
+                      className={`flex-1 py-2 rounded-lg font-medium transition-colors flex items-center justify-center ${medicament.quantity === 0
                           ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                           : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
+                        }`}
                     >
                       <ShoppingCart className="h-4 w-4 mr-2" />
                       Ajouter
                     </button>
-                    <button 
+                    <button
                       className="p-2 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
                       aria-label="Ajouter aux favoris"
                     >
@@ -513,8 +512,8 @@ const SearchPage: React.FC = () => {
         ) : (
           <div className="space-y-6">
             {filteredPharmacies.map((pharmacy) => (
-              <div 
-                key={pharmacy.id} 
+              <div
+                key={pharmacy.id}
                 className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition-all duration-300"
               >
                 <div className="flex flex-col md:flex-row">
@@ -571,11 +570,10 @@ const SearchPage: React.FC = () => {
                               Pharmacie de garde
                             </span>
                           )}
-                          <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                            pharmacy.is_active 
-                              ? 'bg-green-100 text-green-800' 
+                          <span className={`px-2 py-1 text-xs rounded-full font-medium ${pharmacy.is_active
+                              ? 'bg-green-100 text-green-800'
                               : 'bg-red-100 text-red-800'
-                          }`}>
+                            }`}>
                             {pharmacy.is_active ? 'Ouverte' : 'Fermée'}
                           </span>
                           {isPharmacyOpenNow(pharmacy) && (
@@ -623,16 +621,15 @@ const SearchPage: React.FC = () => {
                       <button
                         onClick={() => handleGetDirections(pharmacy)}
                         disabled={!pharmacy.latitude || !pharmacy.longitude}
-                        className={`px-4 py-2 border rounded-lg flex items-center transition-colors ${
-                          pharmacy.latitude && pharmacy.longitude
+                        className={`px-4 py-2 border rounded-lg flex items-center transition-colors ${pharmacy.latitude && pharmacy.longitude
                             ? 'border-blue-600 text-blue-600 hover:bg-blue-50'
                             : 'border-gray-300 text-gray-400 cursor-not-allowed'
-                        }`}
+                          }`}
                       >
                         <Navigation className="h-4 w-4 mr-2" />
                         Itinéraire
                       </button>
-                      <button 
+                      <button
                         className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                         aria-label="Ajouter aux favoris"
                       >

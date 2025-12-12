@@ -47,9 +47,9 @@ import LivreurDashboard from './pages/dashboard/livreur/LivreurDashboard';
 import LivraisonsPage from './pages/dashboard/livreur/LivraisonsPage';
 import MapTrackingPage from './pages/dashboard/livreur/MapTrackingPage';
 
+
 // Components
 import ProtectedRoute from './components/shared/ProtectedRoute';
-import PharmacyCreatePage from './pages/dashboard/pharmacien/PharmacyCreatePage';
 import CreatePharmacyPage from './pages/dashboard/pharmacien/PharmacyCreatePage';
 
 const queryClient = new QueryClient({
@@ -103,19 +103,11 @@ const App: React.FC = () => {
                       </DashboardLayout>
                     </ProtectedRoute>
                   } />
+
                   <Route path="pharmacies" element={
                     <ProtectedRoute requiredRole="admin">
                       <DashboardLayout role="admin">
                         <PharmaciesManagement />
-                      </DashboardLayout>
-                    </ProtectedRoute>
-                  } />
-
-                  // Dans src/App.tsx, ajoutez cette route dans les routes pharmacien
-                  <Route path="/pharmacien/pharmacy/create" element={
-                    <ProtectedRoute requiredRole="pharmacien">
-                      <DashboardLayout role="pharmacien">
-                        <CreatePharmacyPage />
                       </DashboardLayout>
                     </ProtectedRoute>
                   } />
@@ -159,10 +151,18 @@ const App: React.FC = () => {
                       </DashboardLayout>
                     </ProtectedRoute>
                   } />
+
                   <Route path="settings" element={
                     <ProtectedRoute requiredRole="pharmacien">
                       <DashboardLayout role="pharmacien">
                         <PharmacySettings />
+                      </DashboardLayout>
+                    </ProtectedRoute>
+                  } />
+                  <Route path="pharmacy/create" element={
+                    <ProtectedRoute requiredRole="pharmacien">
+                      <DashboardLayout role="pharmacien">
+                        <CreatePharmacyPage />
                       </DashboardLayout>
                     </ProtectedRoute>
                   } />

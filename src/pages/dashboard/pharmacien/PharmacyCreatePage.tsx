@@ -27,7 +27,7 @@ type PharmacyFormData = z.infer<typeof pharmacySchema>;
 const CreatePharmacyPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  
+
   const {
     register,
     handleSubmit,
@@ -71,17 +71,32 @@ const CreatePharmacyPage: React.FC = () => {
     }
   };
 
+
   const createPharmacy = async (data: PharmacyFormData) => {
     try {
-      const pharmacy = await pharmacyService.create(data);
+      // Convertir les données du formulaire en objet compatible avec le service
+      const pharmacyData = {
+        name: data.name,
+        address: data.address,
+        is_garde: data.is_garde,
+        phone: data.phone,
+        opening_time: data.opening_time,
+        closing_time: data.closing_time,
+        ...(data.email && { email: data.email }),
+        ...(data.description && { description: data.description }),
+        ...(data.latitude && { latitude: data.latitude }),
+        ...(data.longitude && { longitude: data.longitude }),
+      };
+
+      const pharmacy = await pharmacyService.create(pharmacyData);
       toast.success('✅ Pharmacie créée avec succès !');
-      
+
       // Mettre à jour l'utilisateur avec la nouvelle pharmacie
       localStorage.setItem('user', JSON.stringify({
         ...user,
         pharmacy: pharmacy
       }));
-      
+
       // Rediriger vers le dashboard
       setTimeout(() => {
         navigate('/pharmacien');
@@ -102,7 +117,7 @@ const CreatePharmacyPage: React.FC = () => {
           <ArrowLeft className="h-4 w-4 mr-2" />
           Retour au dashboard
         </button>
-        
+
         <h1 className="text-2xl font-bold text-gray-900">Créer votre pharmacie</h1>
         <p className="text-gray-600 mt-2">
           Remplissez les informations de votre pharmacie pour commencer à l'utiliser
@@ -117,7 +132,7 @@ const CreatePharmacyPage: React.FC = () => {
               <Store className="h-5 w-5 mr-2 text-blue-600" />
               Informations de la pharmacie
             </h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -208,7 +223,7 @@ const CreatePharmacyPage: React.FC = () => {
               <Clock className="h-5 w-5 mr-2 text-blue-600" />
               Horaires d'ouverture
             </h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

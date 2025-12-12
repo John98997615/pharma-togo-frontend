@@ -1,7 +1,7 @@
 // src/pages/dashboard/pharmacien/PharmacienDashboard.tsx
 import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Package,
   ShoppingCart,
@@ -28,7 +28,9 @@ import { Pharmacy } from '../../../types/pharmacy.types';
 
 const PharmacienDashboard: React.FC = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [pharmacy, setPharmacy] = useState<Pharmacy | null>(null);
+  const [loadingPharmacy, setLoadingPharmacy] = useState(true);
   const [stats, setStats] = useState({
     totalMedicaments: 0,
     lowStock: 0,
@@ -38,22 +40,45 @@ const PharmacienDashboard: React.FC = () => {
     deliveredOrders: 0,
   });
 
+  // Vérifier si l'utilisateur a une pharmacie attachée
+  const userHasPharmacy = user?.pharmacy && typeof user.pharmacy === 'object' && 'id' in user.pharmacy;
+
   // Récupérer la pharmacie du pharmacien
   useEffect(() => {
     const fetchPharmacy = async () => {
-      if (user?.pharmacy) {
-        try {
-          const data = await pharmacyService.getById(user.pharmacy.id);
-          setPharmacy(data);
-        } catch (error) {
-          toast.error('Erreur lors du chargement de la pharmacie');
-        }
-      }
-    };
-    fetchPharmacy();
-  }, [user]);
+      setLoadingPharmacy(true);
 
-  // Récupérer les médicaments
+      // Vérification 1: L'utilisateur a-t-il une pharmacie dans ses données ?
+      if (userHasPharmacy) {
+
+        try {
+          // Vérification 2: La pharmacie a-t-elle un ID ?
+          const pharmacyId = user.pharmacy?.id;
+          if (pharmacyId) {
+            console.log('Fetching pharmacy with ID:', pharmacyId);
+            const data = await pharmacyService.getById(pharmacyId);
+            setPharmacy(data);
+          } else {
+            console.warn('User has pharmacy object but no ID');
+            setPharmacy(null);
+          }
+        } catch (error: any) {
+          console.error('Error fetching pharmacy:', error);
+          toast.error(error.response?.data?.message || 'Erreur lors du chargement de la pharmacie');
+          setPharmacy(null);
+        }
+      } else {
+        console.log('User has no pharmacy in user data');
+        setPharmacy(null);
+      }
+
+      setLoadingPharmacy(false);
+    };
+
+    fetchPharmacy();
+  }, [user, userHasPharmacy]);
+
+  // Récupérer les médicaments - seulement si pharmacie existe
   const { data: medicamentsData, isLoading: medicamentsLoading } = useQuery({
     queryKey: ['pharmacy-medicaments', pharmacy?.id],
     queryFn: () => medicamentService.getAll({
@@ -63,7 +88,7 @@ const PharmacienDashboard: React.FC = () => {
     enabled: !!pharmacy,
   });
 
-  // Récupérer les commandes
+  // Récupérer les commandes - seulement si pharmacie existe
   const { data: commandesData, isLoading: commandesLoading } = useQuery({
     queryKey: ['pharmacy-commandes', pharmacy?.id],
     queryFn: () => commandeService.getAll({
@@ -76,27 +101,51 @@ const PharmacienDashboard: React.FC = () => {
 
   // Calculer les statistiques
   useEffect(() => {
-    if (medicamentsData && commandesData) {
-      const medicaments = medicamentsData.data || [];
-      const commandes = commandesData.data || [];
+    if (pharmacy && medicamentsData && commandesData) {
+      const medicaments = medicamentsData.data || medicamentsData;
+      const commandes = commandesData.data || commandesData;
 
       // Commandes d'aujourd'hui
       const today = new Date().toISOString().split('T')[0];
-      const todayOrders = commandes.filter(c =>
-        c.created_at.startsWith(today)
-      );
+      const todayOrders = Array.isArray(commandes)
+        ? commandes.filter((c: Commande) => c.created_at.startsWith(today))
+        : [];
 
       // Calcul des statistiques
       setStats({
-        totalMedicaments: medicaments.length,
-        lowStock: medicaments.filter(m => m.quantity < 10).length,
-        pendingOrders: commandes.filter(c => c.status === 'en_attente').length,
-        todayRevenue: todayOrders.reduce((sum, c) => sum + c.total_amount, 0),
-        confirmedOrders: commandes.filter(c => c.status === 'confirmee').length,
-        deliveredOrders: commandes.filter(c => c.status === 'livree').length,
+        totalMedicaments: Array.isArray(medicaments) ? medicaments.length : 0,
+        lowStock: Array.isArray(medicaments)
+          ? medicaments.filter((m: Medicament) => m.quantity < 10).length
+          : 0,
+        pendingOrders: Array.isArray(commandes)
+          ? commandes.filter((c: Commande) => c.status === 'en_attente').length
+          : 0,
+        todayRevenue: Array.isArray(todayOrders)
+          ? todayOrders.reduce((sum: number, c: Commande) => sum + (c.total_amount || 0), 0)
+          : 0,
+        confirmedOrders: Array.isArray(commandes)
+          ? commandes.filter((c: Commande) => c.status === 'confirmee').length
+          : 0,
+        deliveredOrders: Array.isArray(commandes)
+          ? commandes.filter((c: Commande) => c.status === 'livree').length
+          : 0,
       });
     }
-  }, [medicamentsData, commandesData]);
+  }, [pharmacy, medicamentsData, commandesData]);
+
+
+  // Fonction pour créer une pharmacie
+  const handleCreatePharmacy = () => {
+    // Vérifiez d'abord si le pharmacien a déjà une pharmacie non chargée
+    if (userHasPharmacy && !pharmacy) {
+      toast.error('Votre pharmacie existe mais n\'a pas pu être chargée. Contactez l\'administrateur.');
+      return;
+    }
+
+
+    // Naviguer vers la page de création
+    navigate('pharmacy/create');
+  };
 
   const toggleGarde = async () => {
     if (!pharmacy) return;
@@ -135,32 +184,85 @@ const PharmacienDashboard: React.FC = () => {
     }
   };
 
+  // Afficher l'état de chargement
+  if (loadingPharmacy) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-gray-600 mt-4">Chargement de votre pharmacie...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si pas de pharmacie
   if (!pharmacy) {
     return (
       <div className="p-6">
-        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6">
-          <div className="flex items-center">
-            <AlertTriangle className="h-6 w-6 text-yellow-600 mr-3" />
-            <div>
-              <h3 className="text-lg font-medium text-yellow-800">Aucune pharmacie</h3>
-              <p className="text-yellow-700 mt-1">
-                Vous n'avez pas encore de pharmacie. Veuillez en créer une pour commencer.
-              </p>
-              // Dans PharmacienDashboard.tsx, modifiez le bouton de création :
-              <Link
-                to="/pharmacien/pharmacy/create"  // Assurez-vous que c'est la même route
-                className="inline-flex items-center mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-lg shadow-sm hover:shadow transition-all"
-              >
-                <Store className="h-5 w-5 mr-2" />
-                Créer ma pharmacie
-              </Link>
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-8">
+          <div className="max-w-2xl mx-auto text-center">
+            <div className="h-20 w-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-6">
+              <Store className="h-10 w-10 text-blue-600" />
             </div>
+
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">
+              Bienvenue, {user?.name} !
+            </h2>
+
+            <p className="text-gray-600 mb-6">
+              Vous êtes pharmacien mais n'avez pas encore de pharmacie associée à votre compte.
+              Créez votre pharmacie pour commencer à gérer vos médicaments et commandes.
+            </p>
+
+            <div className="bg-white rounded-lg p-6 mb-6">
+              <h3 className="font-bold text-lg mb-4">Avantages de créer votre pharmacie :</h3>
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                <li className="flex items-center">
+                  <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center mr-3">
+                    <Package className="h-4 w-4 text-green-600" />
+                  </div>
+                  <span>Gérer votre inventaire</span>
+                </li>
+                <li className="flex items-center">
+                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center mr-3">
+                    <ShoppingCart className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <span>Recevoir des commandes</span>
+                </li>
+                <li className="flex items-center">
+                  <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center mr-3">
+                    <BarChart3 className="h-4 w-4 text-purple-600" />
+                  </div>
+                  <span>Voir les statistiques</span>
+                </li>
+                <li className="flex items-center">
+                  <div className="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center mr-3">
+                    <MapPin className="h-4 w-4 text-yellow-600" />
+                  </div>
+                  <span>Apparaître sur la carte</span>
+                </li>
+              </ul>
+            </div>
+
+            <button
+              onClick={handleCreatePharmacy}
+              className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-lg"
+            >
+              <PlusCircle className="h-5 w-5 mr-2" />
+              Créer ma pharmacie
+            </button>
+
+            <p className="text-sm text-gray-500 mt-4">
+              Si vous pensez qu'il s'agit d'une erreur, contactez l'administrateur.
+            </p>
           </div>
         </div>
       </div>
     );
   }
 
+  // Si la pharmacie existe, afficher le dashboard normal
   return (
     <div className="p-6">
       {/* En-tête */}
@@ -176,26 +278,27 @@ const PharmacienDashboard: React.FC = () => {
             </h1>
             <div className="flex items-center mt-2 space-x-4">
               <div className="flex items-center text-gray-600">
-                <MapPin className="h-4 w-4 mr-1" />
+                <Store className="h-4 w-4 mr-2 text-blue-600" />
                 <span className="font-medium">{pharmacy.name}</span>
               </div>
               <div className="flex items-center">
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${pharmacy.is_active
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-red-100 text-red-800'
+                  ? 'bg-green-100 text-green-800'
+                  : 'bg-red-100 text-red-800'
                   }`}>
                   {pharmacy.is_active ? '🟢 ACTIVE' : '🔴 INACTIVE'}
                 </span>
               </div>
             </div>
+            <p className="text-gray-500 mt-1">{pharmacy.address}</p>
           </div>
 
           <div className="flex flex-wrap gap-3">
             <button
               onClick={toggleGarde}
-              className={`px-4 py-2 rounded-lg font-medium flex items-center ${pharmacy.is_garde
-                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              className={`px-4 py-2 rounded-lg font-medium flex items-center transition-colors ${pharmacy.is_garde
+                ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
             >
               <Clock className="h-4 w-4 mr-2" />
@@ -203,11 +306,11 @@ const PharmacienDashboard: React.FC = () => {
             </button>
 
             <Link
-              to="/pharmacien/settings"
+              to="/pharmacien/pharmacy/edit"
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center"
             >
               <Settings className="h-4 w-4 mr-2" />
-              Paramètres
+              Modifier
             </Link>
           </div>
         </div>
@@ -481,8 +584,8 @@ const PharmacienDashboard: React.FC = () => {
                           <div className="ml-3 w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div
                               className={`h-full ${medicament.quantity < 5 ? 'bg-red-500' :
-                                  medicament.quantity < 10 ? 'bg-yellow-500' :
-                                    'bg-green-500'
+                                medicament.quantity < 10 ? 'bg-yellow-500' :
+                                  'bg-green-500'
                                 }`}
                               style={{ width: `${(medicament.quantity / 50) * 100}%` }}
                             ></div>
