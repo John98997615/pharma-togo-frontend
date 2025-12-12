@@ -5,10 +5,39 @@ import { Category } from '../../types/category.types';
 import { Pharmacy } from '../../types/pharmacy.types';
 
 export const adminService = {
+
   // Gestion des utilisateurs
   getAllUsers: async (params?: { role?: UserRole; search?: string }): Promise<User[]> => {
-    const response = await axiosClient.get('/users', { params });
-    return response.data;
+    try {
+      const response = await axiosClient.get('/users', { params });
+
+      // Gérer différents formats de réponse API
+      if (response.data && Array.isArray(response.data)) {
+        return response.data as User[];
+      }
+
+      if (response.data && typeof response.data === 'object' && 'data' in response.data) {
+        return (response.data as any).data as User[];
+      }
+
+      // Si la réponse directe est un tableau
+      if (Array.isArray(response.data)) {
+        return response.data as User[];
+      }
+
+      // Si c'est un objet avec des propriétés qui ressemblent à un tableau
+      if (response.data && typeof response.data === 'object') {
+        const users = Object.values(response.data);
+        if (Array.isArray(users) && users.length > 0) {
+          return users as User[];
+        }
+      }
+
+      return [];
+    } catch (error) {
+      console.error('Error fetching admin users:', error);
+      return [];
+    }
   },
 
   toggleUserActive: async (id: number): Promise<{ message: string; is_active: boolean }> => {
@@ -25,14 +54,43 @@ export const adminService = {
     await axiosClient.delete(`/users/${id}`);
   },
 
+
   // NOUVELLES MÉTHODES POUR LES PHARMACIES
   getAllPharmacies: async (params?: {
     status?: 'active' | 'inactive';
     garde?: boolean;
     search?: string;
   }): Promise<Pharmacy[]> => {
-    const response = await axiosClient.get('/pharmacies', { params });
-    return response.data;
+    try {
+      const response = await axiosClient.get('/pharmacies', { params });
+
+      // Gérer différents formats de réponse API
+      if (response.data && Array.isArray(response.data)) {
+        return response.data as Pharmacy[];
+      }
+
+      if (response.data && typeof response.data === 'object' && 'data' in response.data) {
+        return (response.data as any).data as Pharmacy[];
+      }
+
+      // Si la réponse directe est un tableau
+      if (Array.isArray(response.data)) {
+        return response.data as Pharmacy[];
+      }
+
+      // Si c'est un objet avec des propriétés qui ressemblent à un tableau
+      if (response.data && typeof response.data === 'object') {
+        const pharmacies = Object.values(response.data);
+        if (Array.isArray(pharmacies) && pharmacies.length > 0) {
+          return pharmacies as Pharmacy[];
+        }
+      }
+
+      return [];
+    } catch (error) {
+      console.error('Error fetching admin pharmacies:', error);
+      return [];
+    }
   },
 
   togglePharmacyActive: async (id: number): Promise<{ message: string; is_active: boolean }> => {

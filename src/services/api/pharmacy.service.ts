@@ -15,10 +15,42 @@ export interface PharmacyParams {
 
 export const pharmacyService = {
 
+
   // GET /pharmacies avec paramètres optionnels de requête
   getAll: async (params?: PharmacyParams): Promise<Pharmacy[]> => {
-    const response = await axiosClient.get('/pharmacies', { params });
-    return response.data.data || response.data;
+    try {
+      const response = await axiosClient.get('/pharmacies', { params });
+
+      // Gérer différents formats de réponse API
+      if (response.data && Array.isArray(response.data)) {
+        return response.data as Pharmacy[];
+      }
+
+      if (response.data && typeof response.data === 'object' && 'data' in response.data) {
+        const data = (response.data as any).data;
+        if (Array.isArray(data)) {
+          return data as Pharmacy[];
+        }
+      }
+
+      // Si la réponse directe est un tableau
+      if (Array.isArray(response.data)) {
+        return response.data as Pharmacy[];
+      }
+
+      // Si c'est un objet avec des propriétés qui ressemblent à un tableau
+      if (response.data && typeof response.data === 'object') {
+        const pharmacies = Object.values(response.data);
+        if (Array.isArray(pharmacies) && pharmacies.length > 0) {
+          return pharmacies as Pharmacy[];
+        }
+      }
+
+      return [];
+    } catch (error) {
+      console.error('Error fetching pharmacies:', error);
+      return [];
+    }
   },
 
   // GET /pharmacies/:id pour obtenir une pharmacie par ID
@@ -64,9 +96,38 @@ export const pharmacyService = {
     return response.data;
   },
 
+
   // GET /pharmacies/pending pour obtenir les pharmacies en attente de validation
   getPending: async (): Promise<Pharmacy[]> => {
-    const response = await axiosClient.get('/pharmacies/pending');
-    return response.data;
+    try {
+      const response = await axiosClient.get('/pharmacies/pending');
+
+      // Gérer différents formats de réponse API
+      if (response.data && Array.isArray(response.data)) {
+        return response.data as Pharmacy[];
+      }
+
+      if (response.data && typeof response.data === 'object' && 'data' in response.data) {
+        return (response.data as any).data as Pharmacy[];
+      }
+
+      // Si la réponse directe est un tableau
+      if (Array.isArray(response.data)) {
+        return response.data as Pharmacy[];
+      }
+
+      // Si c'est un objet avec des propriétés qui ressemblent à un tableau
+      if (response.data && typeof response.data === 'object') {
+        const pharmacies = Object.values(response.data);
+        if (Array.isArray(pharmacies) && pharmacies.length > 0) {
+          return pharmacies as Pharmacy[];
+        }
+      }
+
+      return [];
+    } catch (error) {
+      console.error('Error fetching pending pharmacies:', error);
+      return [];
+    }
   }
 };

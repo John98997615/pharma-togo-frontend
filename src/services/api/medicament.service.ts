@@ -19,10 +19,38 @@ export interface MedicamentParams {
 
 export const medicamentService = {
 
+
     // Récupérer la liste des médicaments avec des paramètres optionnels
     getAll: async (params?: MedicamentParams): Promise<{ data: Medicament[]; meta?: any }> => {
-        const response = await axiosClient.get('/medicaments', { params });
-        return response.data;
+        try {
+            const response = await axiosClient.get('/medicaments', { params });
+
+            // Gérer différents formats de réponse API
+            if (response.data && typeof response.data === 'object') {
+                // Format { data: [...] }
+                if ('data' in response.data) {
+                    const data = (response.data as any).data;
+                    if (Array.isArray(data)) {
+                        return { data: data as Medicament[], meta: (response.data as any).meta };
+                    }
+                }
+
+                // Format direct { [...] }
+                if (Array.isArray(response.data)) {
+                    return { data: response.data as Medicament[] };
+                }
+            }
+
+            // Fallback: essayer de traiter la réponse comme un tableau
+            if (Array.isArray(response.data)) {
+                return { data: response.data as Medicament[] };
+            }
+
+            return { data: [] };
+        } catch (error) {
+            console.error('Error fetching medicaments:', error);
+            return { data: [] };
+        }
     },
 
     // Récupérer un médicament par son ID
@@ -61,14 +89,14 @@ export const medicamentService = {
         return response.data.data || response.data;
     }
 
-     // GET /api/medicaments?search=...
-//   search: async (params: {
-//         name?: string;
-//         category?: string;
-//         min_price?: number;
-//         max_price?: number;
-//     }): Promise<{ data: Medicament[] }> => {
-//         const response = await axiosClient.get('/medicaments', { params });
-//         return response.data;
-//     }
+    // GET /api/medicaments?search=...
+    //   search: async (params: {
+    //         name?: string;
+    //         category?: string;
+    //         min_price?: number;
+    //         max_price?: number;
+    //     }): Promise<{ data: Medicament[] }> => {
+    //         const response = await axiosClient.get('/medicaments', { params });
+    //         return response.data;
+    //     }
 };
