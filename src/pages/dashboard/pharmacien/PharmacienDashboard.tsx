@@ -14,7 +14,8 @@ import {
   PlusCircle,
   BarChart3,
   Calendar,
-  Store
+  Store,
+  RefreshCw
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -27,10 +28,11 @@ import { Medicament } from '../../../types/medicament.types';
 import { Pharmacy } from '../../../types/pharmacy.types';
 
 const PharmacienDashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const navigate = useNavigate();
   const [pharmacy, setPharmacy] = useState<Pharmacy | null>(null);
   const [loadingPharmacy, setLoadingPharmacy] = useState(true);
+  const [retryCount, setRetryCount] = useState<number>(0); // AJOUTEZ CETTE LIGNE
   const [stats, setStats] = useState({
     totalMedicaments: 0,
     lowStock: 0,
@@ -40,46 +42,80 @@ const PharmacienDashboard: React.FC = () => {
     deliveredOrders: 0,
   });
 
-  // Vérifier si l'utilisateur a une pharmacie attachée
-  const userHasPharmacy = user?.pharmacy && typeof user.pharmacy === 'object' && 'id' in user.pharmacy;
-
-  // Récupérer la pharmacie du pharmacien
-  useEffect(() => {
-    const fetchPharmacy = async () => {
-      setLoadingPharmacy(true);
-
-      // Vérification 1: L'utilisateur a-t-il une pharmacie dans ses données ?
-      if (userHasPharmacy) {
-
-        try {
-          // Vérification 2: La pharmacie a-t-elle un ID ?
-          const pharmacyId = user.pharmacy?.id;
-          if (pharmacyId) {
-            console.log('Fetching pharmacy with ID:', pharmacyId);
-            const data = await pharmacyService.getById(pharmacyId);
-            setPharmacy(data);
-          } else {
-            console.warn('User has pharmacy object but no ID');
-            setPharmacy(null);
-          }
-        } catch (error: any) {
-          console.error('Error fetching pharmacy:', error);
-          toast.error(error.response?.data?.message || 'Erreur lors du chargement de la pharmacie');
-          setPharmacy(null);
+  // Fonction améliorée pour récupérer la pharmacie
+  const fetchPharmacy = async (forceRefresh = false) => {
+    setLoadingPharmacy(true);
+    
+    try {
+      console.log('🔄 Fetching pharmacy data...');
+      console.log('User object:', user);
+      console.log('User pharmacy property:', user?.pharmacy);
+      
+      // ESSAI 1: Vérifier si la pharmacie est directement dans l'objet user
+      if (user?.pharmacy && typeof user.pharmacy === 'object') {
+        console.log('📦 Pharmacy found in user object:', user.pharmacy);
+        
+        // Si c'est un objet complet avec id, l'utiliser directement
+        if (user.pharmacy.id && user.pharmacy.name) {
+          console.log('✅ Using pharmacy from user object');
+          setPharmacy(user.pharmacy as Pharmacy);
+          setLoadingPharmacy(false);
+          return;
+        }
+      }
+      
+      // ESSAI 2: Récupérer toutes les pharmacies et trouver celle de l'utilisateur
+      console.log('🔍 Fetching all pharmacies to find user pharmacy...');
+      const allPharmacies = await pharmacyService.getAll();
+      console.log('All pharmacies:', allPharmacies);
+      
+      // Trouver la pharmacie qui appartient à cet utilisateur
+      const userPharmacy = Array.isArray(allPharmacies) 
+        ? allPharmacies.find((p: Pharmacy) => p.user_id === user?.id)
+        : null;
+      
+      if (userPharmacy) {
+        console.log('✅ Found user pharmacy:', userPharmacy);
+        setPharmacy(userPharmacy);
+        
+        // Mettre à jour l'utilisateur avec la pharmacie trouvée
+        if (user) {
+          const updatedUser = {
+            ...user,
+            pharmacy: userPharmacy
+          };
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+          updateUser(updatedUser);
         }
       } else {
-        console.log('User has no pharmacy in user data');
+        console.log('❌ No pharmacy found for this user');
         setPharmacy(null);
       }
-
+      
+    } catch (error: any) {
+      console.error('❌ Error in fetchPharmacy:', error);
+      
+      // Essayer une approche différente en cas d'erreur
+      if (retryCount < 3 && !forceRefresh) {
+        setRetryCount((prev: number) => prev + 1);
+        console.log(`🔄 Retry attempt ${retryCount + 1}/3`);
+        setTimeout(() => fetchPharmacy(true), 1000 * (retryCount + 1));
+      } else {
+        toast.error('Impossible de charger votre pharmacie. Contactez l\'administrateur.');
+        setPharmacy(null);
+      }
+    } finally {
       setLoadingPharmacy(false);
-    };
+    }
+  };
 
+  // Récupérer la pharmacie au chargement
+  useEffect(() => {
     fetchPharmacy();
-  }, [user, userHasPharmacy]);
+  }, [user]);
 
   // Récupérer les médicaments - seulement si pharmacie existe
-  const { data: medicamentsData, isLoading: medicamentsLoading } = useQuery({
+  const { data: medicamentsData, isLoading: medicamentsLoading, refetch: refetchMedicaments } = useQuery({
     queryKey: ['pharmacy-medicaments', pharmacy?.id],
     queryFn: () => medicamentService.getAll({
       pharmacy_id: pharmacy?.id,
@@ -89,7 +125,7 @@ const PharmacienDashboard: React.FC = () => {
   });
 
   // Récupérer les commandes - seulement si pharmacie existe
-  const { data: commandesData, isLoading: commandesLoading } = useQuery({
+  const { data: commandesData, isLoading: commandesLoading, refetch: refetchCommandes } = useQuery({
     queryKey: ['pharmacy-commandes', pharmacy?.id],
     queryFn: () => commandeService.getAll({
       pharmacy_id: pharmacy?.id,
@@ -108,7 +144,7 @@ const PharmacienDashboard: React.FC = () => {
       // Commandes d'aujourd'hui
       const today = new Date().toISOString().split('T')[0];
       const todayOrders = Array.isArray(commandes)
-        ? commandes.filter((c: Commande) => c.created_at.startsWith(today))
+        ? commandes.filter((c: Commande) => c.created_at && c.created_at.startsWith(today))
         : [];
 
       // Calcul des statistiques
@@ -133,18 +169,17 @@ const PharmacienDashboard: React.FC = () => {
     }
   }, [pharmacy, medicamentsData, commandesData]);
 
+  // Fonction pour forcer le rechargement
+  const handleForceRefresh = () => {
+    setRetryCount(0);
+    fetchPharmacy(true);
+    refetchMedicaments();
+    refetchCommandes();
+    toast.success('Actualisation en cours...');
+  };
 
-  // Fonction pour créer une pharmacie
   const handleCreatePharmacy = () => {
-    // Vérifiez d'abord si le pharmacien a déjà une pharmacie non chargée
-    if (userHasPharmacy && !pharmacy) {
-      toast.error('Votre pharmacie existe mais n\'a pas pu être chargée. Contactez l\'administrateur.');
-      return;
-    }
-
-
-    // Naviguer vers la page de création
-    navigate('pharmacy/create');
+    navigate('/pharmacien/pharmacy/create');
   };
 
   const toggleGarde = async () => {
@@ -184,13 +219,48 @@ const PharmacienDashboard: React.FC = () => {
     }
   };
 
+  // // Debug panel (à enlever en production)
+  // const DebugPanel = () => (
+  //   <div className="mb-4 bg-gray-900 text-white p-4 rounded-lg text-xs">
+  //     <div className="flex justify-between items-center mb-2">
+  //       <strong>Debug Information</strong>
+  //       <button 
+  //         onClick={() => {
+  //           console.log('User:', user);
+  //           console.log('Pharmacy:', pharmacy);
+  //           console.log('LocalStorage User:', localStorage.getItem('user'));
+  //         }}
+  //         className="px-2 py-1 bg-blue-600 rounded text-xs"
+  //       >
+  //         Log Console
+  //       </button>
+  //     </div>
+  //     <div className="grid grid-cols-2 gap-2">
+  //       <div>User ID: <span className="text-yellow-300">{user?.id}</span></div>
+  //       <div>User Role: <span className="text-yellow-300">{user?.role}</span></div>
+  //       <div>Pharmacy Found: <span className={pharmacy ? "text-green-300" : "text-red-300"}>{pharmacy ? 'YES' : 'NO'}</span></div>
+  //       <div>Pharmacy ID: <span className="text-yellow-300">{pharmacy?.id}</span></div>
+  //       <div>Retry Count: <span className="text-yellow-300">{retryCount}</span></div>
+  //       <div>Loading: <span className="text-yellow-300">{loadingPharmacy ? 'YES' : 'NO'}</span></div>
+  //     </div>
+  //   </div>
+  // );
+
   // Afficher l'état de chargement
   if (loadingPharmacy) {
     return (
       <div className="p-6">
+        {/* <DebugPanel /> */}
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="text-gray-600 mt-4">Chargement de votre pharmacie...</p>
+          <button
+            onClick={handleForceRefresh}
+            className="mt-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium flex items-center mx-auto"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Réessayer
+          </button>
         </div>
       </div>
     );
@@ -200,6 +270,7 @@ const PharmacienDashboard: React.FC = () => {
   if (!pharmacy) {
     return (
       <div className="p-6">
+        {/* <DebugPanel /> */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-8">
           <div className="max-w-2xl mx-auto text-center">
             <div className="h-20 w-20 mx-auto bg-blue-100 rounded-full flex items-center justify-center mb-6">
@@ -210,52 +281,80 @@ const PharmacienDashboard: React.FC = () => {
               Bienvenue, {user?.name} !
             </h2>
 
+            <div className="bg-white rounded-lg p-6 mb-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-lg">État de votre compte</h3>
+                <button
+                  onClick={handleForceRefresh}
+                  className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium flex items-center"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Vérifier
+                </button>
+              </div>
+              
+              <div className="text-left space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Rôle utilisateur:</span>
+                  <span className="font-medium capitalize">{user?.role}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Statut compte:</span>
+                  <span className={`px-2 py-1 rounded-full text-xs ${user?.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {user?.is_active ? 'Actif' : 'Inactif'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Pharmacie associée:</span>
+                  <span className="px-2 py-1 rounded-full text-xs bg-red-100 text-red-800">
+                    Non trouvée
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <p className="text-gray-600 mb-6">
-              Vous êtes pharmacien mais n'avez pas encore de pharmacie associée à votre compte.
-              Créez votre pharmacie pour commencer à gérer vos médicaments et commandes.
+              {user?.pharmacy 
+                ? "Votre compte a une pharmacie référencée mais elle n'a pas pu être chargée."
+                : "Vous êtes pharmacien mais n'avez pas encore de pharmacie associée à votre compte."
+              }
             </p>
 
             <div className="bg-white rounded-lg p-6 mb-6">
-              <h3 className="font-bold text-lg mb-4">Avantages de créer votre pharmacie :</h3>
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-                <li className="flex items-center">
-                  <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center mr-3">
-                    <Package className="h-4 w-4 text-green-600" />
-                  </div>
-                  <span>Gérer votre inventaire</span>
-                </li>
-                <li className="flex items-center">
-                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center mr-3">
-                    <ShoppingCart className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <span>Recevoir des commandes</span>
-                </li>
-                <li className="flex items-center">
-                  <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center mr-3">
-                    <BarChart3 className="h-4 w-4 text-purple-600" />
-                  </div>
-                  <span>Voir les statistiques</span>
-                </li>
-                <li className="flex items-center">
-                  <div className="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center mr-3">
-                    <MapPin className="h-4 w-4 text-yellow-600" />
-                  </div>
-                  <span>Apparaître sur la carte</span>
-                </li>
-              </ul>
+              <h3 className="font-bold text-lg mb-4">Options disponibles :</h3>
+              <div className="space-y-3">
+                <button
+                  onClick={handleCreatePharmacy}
+                  className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center"
+                >
+                  <PlusCircle className="h-5 w-5 mr-2" />
+                  Créer une nouvelle pharmacie
+                </button>
+                
+                <button
+                  onClick={handleForceRefresh}
+                  className="w-full px-6 py-3 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-medium flex items-center justify-center"
+                >
+                  <RefreshCw className="h-5 w-5 mr-2" />
+                  Rechercher à nouveau ma pharmacie
+                </button>
+                
+                <button
+                  onClick={() => window.location.href = 'mailto:admin@pharmatogo.tg?subject=Problème%20pharmacie%20non%20chargée'}
+                  className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium flex items-center justify-center"
+                >
+                  <Settings className="h-5 w-5 mr-2" />
+                  Contacter l'administrateur
+                </button>
+              </div>
             </div>
 
-            <button
-              onClick={handleCreatePharmacy}
-              className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-lg"
-            >
-              <PlusCircle className="h-5 w-5 mr-2" />
-              Créer ma pharmacie
-            </button>
-
-            <p className="text-sm text-gray-500 mt-4">
-              Si vous pensez qu'il s'agit d'une erreur, contactez l'administrateur.
-            </p>
+            <div className="text-sm text-gray-500 space-y-2">
+              <p>User ID: {user?.id}</p>
+              <p>Email: {user?.email}</p>
+              <p>Rôle: {user?.role}</p>
+              <p>Compte créé le: {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</p>
+            </div>
           </div>
         </div>
       </div>
@@ -265,6 +364,8 @@ const PharmacienDashboard: React.FC = () => {
   // Si la pharmacie existe, afficher le dashboard normal
   return (
     <div className="p-6">
+      {/* <DebugPanel /> */}
+      
       {/* En-tête */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -273,9 +374,18 @@ const PharmacienDashboard: React.FC = () => {
       >
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-              Tableau de bord Pharmacien
-            </h1>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+                Tableau de bord Pharmacien
+              </h1>
+              <button
+                onClick={handleForceRefresh}
+                className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200"
+                title="Actualiser"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            </div>
             <div className="flex items-center mt-2 space-x-4">
               <div className="flex items-center text-gray-600">
                 <Store className="h-4 w-4 mr-2 text-blue-600" />
@@ -291,6 +401,9 @@ const PharmacienDashboard: React.FC = () => {
               </div>
             </div>
             <p className="text-gray-500 mt-1">{pharmacy.address}</p>
+            <p className="text-sm text-gray-400 mt-1">
+              ID: {pharmacy.id} • Créée le: {new Date(pharmacy.created_at).toLocaleDateString()}
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-3">
@@ -315,6 +428,21 @@ const PharmacienDashboard: React.FC = () => {
           </div>
         </div>
       </motion.div>
+
+      {/* Message de succès */}
+      <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4">
+        <div className="flex items-center">
+          <Store className="h-5 w-5 text-green-600 mr-3" />
+          <div>
+            <span className="font-bold text-green-700">
+              ✅ Pharmacie chargée avec succès !
+            </span>
+            <p className="text-green-600 text-sm mt-1">
+              Bienvenue dans votre espace pharmacien. Vous pouvez maintenant gérer vos médicaments et commandes.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

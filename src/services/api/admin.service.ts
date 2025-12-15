@@ -3,6 +3,7 @@ import axiosClient from './axiosClient';
 import { User, UserRole } from '../../types/user.types';
 import { Category } from '../../types/category.types';
 import { Pharmacy } from '../../types/pharmacy.types';
+import { pharmacyService } from './pharmacy.service';
 
 export const adminService = {
 
@@ -40,57 +41,78 @@ export const adminService = {
     }
   },
 
+  // PUT /api/users/{user}/toggle-active
   toggleUserActive: async (id: number): Promise<{ message: string; is_active: boolean }> => {
     const response = await axiosClient.put(`/users/${id}/toggle-active`);
     return response.data;
   },
 
+  // PUT /api/users/{user}/role
   updateUserRole: async (id: number, role: UserRole): Promise<User> => {
     const response = await axiosClient.put(`/users/${id}/role`, { role });
     return response.data;
   },
 
+  // DELETE /api/users/{user}
   deleteUser: async (id: number): Promise<void> => {
     await axiosClient.delete(`/users/${id}`);
   },
 
 
-  // NOUVELLES MÉTHODES POUR LES PHARMACIES
-  getAllPharmacies: async (params?: {
-    status?: 'active' | 'inactive';
-    garde?: boolean;
-    search?: string;
-  }): Promise<Pharmacy[]> => {
+   // Récupérer TOUTES les pharmacies (actives + inactives)
+  getAllPharmacies: async (): Promise<Pharmacy[]> => {
     try {
-      const response = await axiosClient.get('/pharmacies', { params });
-
-      // Gérer différents formats de réponse API
-      if (response.data && Array.isArray(response.data)) {
-        return response.data as Pharmacy[];
+      // Essayer d'abord la route admin spécifique
+      try {
+        const response = await axiosClient.get('/admin/pharmacies/all');
+        return response.data.data || response.data;
+      } catch (adminError) {
+        console.log('Route admin spécifique non disponible, tentative standard...');
       }
-
-      if (response.data && typeof response.data === 'object' && 'data' in response.data) {
-        return (response.data as any).data as Pharmacy[];
-      }
-
-      // Si la réponse directe est un tableau
-      if (Array.isArray(response.data)) {
-        return response.data as Pharmacy[];
-      }
-
-      // Si c'est un objet avec des propriétés qui ressemblent à un tableau
-      if (response.data && typeof response.data === 'object') {
-        const pharmacies = Object.values(response.data);
-        if (Array.isArray(pharmacies) && pharmacies.length > 0) {
-          return pharmacies as Pharmacy[];
+      
+      // Fallback: utiliser la route standard avec paramètre
+      const response = await axiosClient.get('/pharmacies', {
+        params: { 
+          all: true, // Paramètre pour indiquer qu'on veut tout
+          include_inactive: true 
         }
+      });
+      
+      // Si toujours vide, essayer les pharmacies en attente
+      if (!response.data || response.data.length === 0 || 
+          (response.data.data && response.data.data.length === 0)) {
+        console.log('Route standard vide, tentative pharmacies/pending...');
+        const pendingResponse = await axiosClient.get('/pharmacies/pending');
+        const pendingPharms = pendingResponse.data.data || pendingResponse.data;
+        
+        // Récupérer aussi les pharmacies actives
+        const activeResponse = await axiosClient.get('/pharmacies');
+        const activePharms = activeResponse.data.data || activeResponse.data;
+        
+        // Fusionner
+        return [...activePharms, ...pendingPharms];
       }
-
+      
+      // Gérer différents formats de réponse
+      if (response.data && Array.isArray(response.data)) {
+        return response.data;
+      }
+      
+      if (response.data && typeof response.data === 'object' && 'data' in response.data) {
+        return response.data.data;
+      }
+      
       return [];
-    } catch (error) {
-      console.error('Error fetching admin pharmacies:', error);
+    } catch (error: any) {
+      console.error('Erreur getAllPharmacies:', error.response?.data || error.message);
       return [];
     }
+  },
+
+  // GET /api/pharmacies/pending
+  getPendingPharmacies: async (): Promise<any> => {
+    const response = await axiosClient.get('/pharmacies/pending');
+    return response.data;
   },
 
   togglePharmacyActive: async (id: number): Promise<{ message: string; is_active: boolean }> => {
@@ -109,6 +131,7 @@ export const adminService = {
   },
 
   // Gestion des catégories
+  // POST /api/categories
   createCategory: async (data: FormData): Promise<Category> => {
     const response = await axiosClient.post('/categories', data, {
       headers: { 'Content-Type': 'multipart/form-data' }
@@ -116,6 +139,7 @@ export const adminService = {
     return response.data;
   },
 
+  // UPDATE /api/categories/{category}
   updateCategory: async (id: number, data: FormData | Partial<Category>): Promise<Category> => {
     const isFormData = data instanceof FormData;
     const headers = isFormData
@@ -135,12 +159,13 @@ export const adminService = {
     return response.data;
   },
 
-  // Statistiques
+  // GET /api/statistics
   getStatistics: async (): Promise<any> => {
     const response = await axiosClient.get('/statistics');
     return response.data;
   },
 
+  // GET /api/recent-orders
   getRecentOrders: async (): Promise<any> => {
     const response = await axiosClient.get('/recent-orders');
     return response.data;

@@ -3,12 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { 
-  Building, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  Clock, 
+import {
+  Building,
+  MapPin,
+  Phone,
+  Mail,
+  Clock,
   FileText,
   Image as ImageIcon,
   Upload,
@@ -25,7 +25,8 @@ const pharmacySchema = z.object({
   phone: z.string().regex(/^\+?[0-9\s\-]+$/, 'Numéro de téléphone invalide'),
   email: z.string().email('Email invalide').optional(),
   logo: z.any().optional(),
-  is_garde: z.boolean().default(false),
+  is_garde: z.union([z.boolean(), z.string()])
+    .transform(val => val === true || val === 'true' || val === '1'),
   opening_time: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Format HH:mm requis'),
   closing_time: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, 'Format HH:mm requis'),
   is_active: z.boolean().default(true),
@@ -116,7 +117,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
 
   const handleFormSubmit = async (data: PharmacyFormData) => {
     const formData = new FormData();
-    
+
     // Ajouter les champs textuels
     formData.append('name', data.name);
     if (data.description) formData.append('description', data.description);
@@ -125,11 +126,11 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
     formData.append('longitude', data.longitude.toString());
     formData.append('phone', data.phone);
     if (data.email) formData.append('email', data.email);
-    formData.append('is_garde', data.is_garde.toString());
+    formData.append('is_garde', data.is_garde ? 'true' : 'false');
     formData.append('opening_time', data.opening_time);
     formData.append('closing_time', data.closing_time);
     formData.append('is_active', data.is_active.toString());
-    
+
     // Ajouter le logo si fourni
     if (data.logo && data.logo.length > 0) {
       formData.append('logo', data.logo[0]);
@@ -155,7 +156,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
           <Building className="h-5 w-5 mr-2" />
           Informations de la pharmacie
         </h3>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -231,7 +232,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
           <MapPin className="h-5 w-5 mr-2" />
           Localisation
         </h3>
-        
+
         <div className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -311,7 +312,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
           <Clock className="h-5 w-5 mr-2" />
           Horaires d'ouverture
         </h3>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -349,7 +350,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
           <ImageIcon className="h-5 w-5 mr-2" />
           Logo de la pharmacie
         </h3>
-        
+
         <div className="flex flex-col md:flex-row items-start md:items-center space-y-6 md:space-y-0 md:space-x-6">
           {/* Prévisualisation */}
           <div className="flex-shrink-0">
@@ -403,7 +404,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
       {/* Options */}
       <div className="bg-white rounded-xl p-6 border border-gray-200">
         <h3 className="text-lg font-bold mb-6">Options</h3>
-        
+
         <div className="space-y-4">
           <div className="flex items-center">
             <input
@@ -411,6 +412,11 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
               type="checkbox"
               id="is_garde"
               className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
+              // Convertir la valeur en boolean
+              onChange={(e) => {
+                const value = e.target.checked;
+                setValue('is_garde', value, { shouldValidate: true });
+              }}
             />
             <label htmlFor="is_garde" className="ml-2 block text-sm text-gray-700">
               Pharmacie de garde (ouverte 24h/24)

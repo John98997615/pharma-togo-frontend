@@ -132,9 +132,12 @@ const CommandesPage: React.FC = () => {
             </select>
           </div>
           
-          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+            <button 
+            onClick={() => window.location.href = '/commander'}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            >
             Nouvelle commande
-          </button>
+            </button>
         </div>
 
         {/* Statistiques */}

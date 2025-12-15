@@ -72,23 +72,30 @@ const CreatePharmacyPage: React.FC = () => {
   };
 
 
+
   const createPharmacy = async (data: PharmacyFormData) => {
     try {
-      // Convertir les données du formulaire en objet compatible avec le service
-      const pharmacyData = {
-        name: data.name,
-        address: data.address,
-        is_garde: data.is_garde,
-        phone: data.phone,
-        opening_time: data.opening_time,
-        closing_time: data.closing_time,
-        ...(data.email && { email: data.email }),
-        ...(data.description && { description: data.description }),
-        ...(data.latitude && { latitude: data.latitude }),
-        ...(data.longitude && { longitude: data.longitude }),
-      };
+      // Créer un objet FormData pour l'upload de fichiers si nécessaire
+      const formData = new FormData();
 
-      const pharmacy = await pharmacyService.create(pharmacyData);
+      // Ajouter tous les champs de données
+      formData.append('name', data.name);
+      formData.append('address', data.address);
+      const isGardeValue = typeof data.is_garde === 'boolean'
+        ? data.is_garde
+        : data.is_garde === 'true' || data.is_garde === true;
+      formData.append('is_garde', isGardeValue ? '1' : '0');
+      formData.append('phone', data.phone);
+      formData.append('opening_time', data.opening_time);
+      formData.append('closing_time', data.closing_time);
+
+      // Ajouter les champs optionnels s'ils existent
+      if (data.email) formData.append('email', data.email);
+      if (data.description) formData.append('description', data.description);
+      if (data.latitude) formData.append('latitude', data.latitude.toString());
+      if (data.longitude) formData.append('longitude', data.longitude.toString());
+
+      const pharmacy = await pharmacyService.create(formData);
       toast.success('✅ Pharmacie créée avec succès !');
 
       // Mettre à jour l'utilisateur avec la nouvelle pharmacie
@@ -201,6 +208,32 @@ const CreatePharmacyPage: React.FC = () => {
                 {errors.email && (
                   <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Latitude
+                </label>
+                <input
+                  {...register('latitude', { valueAsNumber: true })}
+                  type="number"
+                  step="0.000001"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: 6.131935"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Longitude
+                </label>
+                <input
+                  {...register('longitude', { valueAsNumber: true })}
+                  type="number"
+                  step="0.000001"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Ex: 1.222969"
+                />
               </div>
 
               <div>

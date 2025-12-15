@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useCart } from '../../hooks/useCart';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
@@ -175,7 +176,7 @@ const MedicamentDetailPage: React.FC = () => {
                         />
                       ))}
                     </div>
-                    <span className="ml-2 text-gray-600">4.5 (124 avis)</span>
+                    <span className="ml-2 text-gray-600">4.5 (89 avis)</span>
                     <span className="mx-2">•</span>
                     <span className="text-gray-600">{medicament.pharmacy?.name}</span>
                   </div>

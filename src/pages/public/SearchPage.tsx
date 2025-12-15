@@ -1,6 +1,7 @@
 // src/pages/public/SearchPage.tsx
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useCart } from '../../hooks/useCart';
 import { useQuery } from '@tanstack/react-query';
 import {
   Search, Filter, MapPin, Building2, Package,
@@ -28,6 +29,8 @@ const SearchPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [searchType, setSearchType] = useState<'medicaments' | 'pharmacies'>('medicaments');
+  const { addItemToCart, canAddToCart, getItemQuantity } = useCart();
+  const [quantity, setQuantity] = useState(1);
 
   const initialFilters: SearchFilters = {
     query: searchParams.get('q') || '',
@@ -122,6 +125,8 @@ const SearchPage: React.FC = () => {
   })();
 
 
+
+
   // Gestion sécurisée des catégories
   const categories: Category[] = (() => {
     if (categoriesLoading) return [];
@@ -131,10 +136,11 @@ const SearchPage: React.FC = () => {
       return categoriesResponse;
     }
 
+    // Type guard pour vérifier si c'est un objet avec une propriété data
     if (categoriesResponse && typeof categoriesResponse === 'object') {
-      // Essayez différentes structures de réponse
-      if ('data' in categoriesResponse && Array.isArray((categoriesResponse as any).data)) {
-        return (categoriesResponse as any).data;
+      const responseObj = categoriesResponse as any;
+      if ('data' in responseObj && Array.isArray(responseObj.data)) {
+        return responseObj.data as Category[];
       }
 
       // Si c'est un objet avec des propriétés qui ressemblent à un tableau
@@ -477,10 +483,10 @@ const SearchPage: React.FC = () => {
                       {medicament.price?.toLocaleString('fr-FR') || '0'} FCFA
                     </span>
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${medicament.quantity > 10
-                        ? 'bg-green-100 text-green-800'
-                        : medicament.quantity > 0
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : 'bg-red-100 text-red-800'
+                      ? 'bg-green-100 text-green-800'
+                      : medicament.quantity > 0
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-red-100 text-red-800'
                       }`}>
                       {medicament.quantity > 0 ? 'En stock' : 'Rupture'}
                     </span>
@@ -491,8 +497,8 @@ const SearchPage: React.FC = () => {
                       onClick={() => handleAddToCart(medicament)}
                       disabled={medicament.quantity === 0}
                       className={`flex-1 py-2 rounded-lg font-medium transition-colors flex items-center justify-center ${medicament.quantity === 0
-                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
                         }`}
                     >
                       <ShoppingCart className="h-4 w-4 mr-2" />
@@ -571,8 +577,8 @@ const SearchPage: React.FC = () => {
                             </span>
                           )}
                           <span className={`px-2 py-1 text-xs rounded-full font-medium ${pharmacy.is_active
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
                             }`}>
                             {pharmacy.is_active ? 'Ouverte' : 'Fermée'}
                           </span>
@@ -622,8 +628,8 @@ const SearchPage: React.FC = () => {
                         onClick={() => handleGetDirections(pharmacy)}
                         disabled={!pharmacy.latitude || !pharmacy.longitude}
                         className={`px-4 py-2 border rounded-lg flex items-center transition-colors ${pharmacy.latitude && pharmacy.longitude
-                            ? 'border-blue-600 text-blue-600 hover:bg-blue-50'
-                            : 'border-gray-300 text-gray-400 cursor-not-allowed'
+                          ? 'border-blue-600 text-blue-600 hover:bg-blue-50'
+                          : 'border-gray-300 text-gray-400 cursor-not-allowed'
                           }`}
                       >
                         <Navigation className="h-4 w-4 mr-2" />

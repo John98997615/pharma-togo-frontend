@@ -59,6 +59,17 @@ export const pharmacyService = {
     return response.data;
   },
 
+  // Ajoutez cette méthode à pharmacy.service.ts
+  getByUserId: async (userId: number): Promise<Pharmacy | null> => {
+    try {
+      const response = await axiosClient.get(`/pharmacies/user/${userId}`);
+      return response.data.pharmacy;
+    } catch (error) {
+      console.error('Error fetching pharmacy by user ID:', error);
+      return null;
+    }
+  },
+
 
   // POST /pharmacies pour créer une nouvelle pharmacie
   create: async (data: FormData | Partial<Pharmacy>): Promise<Pharmacy> => {

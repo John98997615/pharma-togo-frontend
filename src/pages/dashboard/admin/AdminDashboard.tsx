@@ -12,15 +12,41 @@ import {
   Activity,
   Calendar,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  AlertCircle
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { adminService } from '../../../services/api/admin.service';
 import { useAuth } from '../../../context/AuthContext';
+import { toast } from 'react-hot-toast';
+import { useQuery } from '@tanstack/react-query';
+
+interface DashboardStats {
+  totalUsers: number;
+  activeUsers: number;
+  totalPharmacies: number;
+  pendingPharmacies: number;
+  totalOrders: number;
+  totalRevenue: number;
+  todayOrders: number;
+  todayRevenue: number;
+  activePharmacies: number;
+  inactivePharmacies: number;
+  pharmaciesGarde: number;
+}
+
+interface RecentActivity {
+  id: number;
+  type: 'order' | 'user' | 'pharmacy' | 'payment' | 'delivery';
+  user: string;
+  action: string;
+  time: string;
+  amount?: number;
+}
 
 const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [stats, setStats] = useState({
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
     totalUsers: 0,
     totalPharmacies: 0,
     totalOrders: 0,
@@ -29,44 +55,160 @@ const AdminDashboard: React.FC = () => {
     pendingPharmacies: 0,
     todayOrders: 0,
     todayRevenue: 0,
+    activePharmacies: 0,
+    inactivePharmacies: 0,
+    pharmaciesGarde: 0
   });
-  const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  // Récupérer les statistiques de l'API
+  const { data: apiStats, isLoading: statsLoading } = useQuery({
+    queryKey: ['admin-statistics'],
+    queryFn: async () => {
+      try {
+        const stats = await adminService.getStatistics();
+        console.log('Statistiques API:', stats);
+        return stats;
+      } catch (error) {
+        console.error('Erreur stats API:', error);
+        throw error;
+      }
+    }
+  });
 
-  const fetchDashboardData = async () => {
-    setLoading(true);
+  // Récupérer les commandes récentes
+  const { data: recentOrders, isLoading: ordersLoading } = useQuery({
+    queryKey: ['recent-orders'],
+    queryFn: () => adminService.getRecentOrders(),
+  });
+
+  // Récupérer les pharmacies en attente
+  const { data: pendingPharmacies } = useQuery({
+    queryKey: ['pending-pharmacies'],
+    queryFn: () => adminService.getPendingPharmacies(),
+  });
+
+  useEffect(() => {
+    if (apiStats) {
+      processStats(apiStats);
+    }
+  }, [apiStats, recentOrders, pendingPharmacies]);
+
+  const processStats = (stats: any) => {
     try {
-      // Simuler les données (remplacer par les appels API réels)
-      const statistics = await adminService.getStatistics();
-      const recentOrders = await adminService.getRecentOrders();
+      console.log('Processing stats:', stats);
       
-      setStats({
-        totalUsers: 1245,
-        totalPharmacies: 89,
-        totalOrders: 3456,
-        totalRevenue: 12450000,
-        activeUsers: 890,
-        pendingPharmacies: 12,
-        todayOrders: 45,
-        todayRevenue: 125000,
-      });
+      // Calculer les statistiques aujourd'hui (simulation basée sur les données existantes)
+      const today = new Date();
+      const todayString = today.toISOString().split('T')[0];
       
-      setRecentActivities([
-        { id: 1, type: 'order', user: 'John Doe', action: 'a passé une commande', time: 'Il y a 5 min', amount: 15000 },
-        { id: 2, type: 'user', user: 'Alice Smith', action: 's\'est inscrit', time: 'Il y a 15 min' },
-        { id: 3, type: 'pharmacy', user: 'Pharmacie du Centre', action: 'a été approuvée', time: 'Il y a 30 min' },
-        { id: 4, type: 'payment', user: 'Mohamed Ali', action: 'a effectué un paiement', time: 'Il y a 1h', amount: 25000 },
-        { id: 5, type: 'delivery', user: 'Livreur #12', action: 'a livré une commande', time: 'Il y a 2h' },
-      ]);
+      // Transformer les données de l'API
+      const processedStats: DashboardStats = {
+        totalUsers: stats.users?.total || 0,
+        activeUsers: stats.users?.total || 0, // Ajuster selon vos besoins
+        totalPharmacies: stats.pharmacies?.total || 0,
+        pendingPharmacies: pendingPharmacies?.data?.length || pendingPharmacies?.length || 0,
+        totalOrders: stats.commandes?.total || 0,
+        totalRevenue: stats.commandes?.chiffre_affaires || 0,
+        todayOrders: 0, // À calculer si disponible dans l'API
+        todayRevenue: 0, // À calculer si disponible dans l'API
+        activePharmacies: stats.pharmacies?.active || 0,
+        inactivePharmacies: stats.pharmacies?.inactive || 0,
+        pharmaciesGarde: stats.pharmacies?.garde || 0
+      };
+
+      // Calculer les commandes d'aujourd'hui (simulation)
+      if (recentOrders) {
+        const ordersArray = Array.isArray(recentOrders) 
+          ? recentOrders 
+          : recentOrders.data || [];
+        
+        const todayOrders = ordersArray.filter((order: any) => {
+          const orderDate = new Date(order.created_at || order.date).toISOString().split('T')[0];
+          return orderDate === todayString;
+        });
+        
+        processedStats.todayOrders = todayOrders.length;
+        processedStats.todayRevenue = todayOrders.reduce(
+          (sum: number, order: any) => sum + (order.total_amount || 0), 
+          0
+        );
+      }
+
+      setDashboardStats(processedStats);
+      
+      // Générer les activités récentes à partir des commandes récentes
+      if (recentOrders) {
+        generateRecentActivities(recentOrders);
+      }
+      
+      setLoading(false);
     } catch (error) {
-      console.error('Erreur lors du chargement du dashboard:', error);
-    } finally {
+      console.error('Erreur lors du traitement des statistiques:', error);
+      toast.error('Erreur lors du chargement des statistiques');
       setLoading(false);
     }
+  };
+
+  const generateRecentActivities = (orders: any) => {
+    const activities: RecentActivity[] = [];
+    const ordersArray = Array.isArray(orders) ? orders : orders.data || [];
+    
+    // Convertir les commandes récentes en activités
+    ordersArray.slice(0, 5).forEach((order: any) => {
+      activities.push({
+        id: order.id,
+        type: 'order',
+        user: order.user?.name || 'Client',
+        action: 'a passé une commande',
+        time: calculateTimeAgo(order.created_at),
+        amount: order.total_amount
+      });
+    });
+
+    // Ajouter des activités pour les pharmacies en attente
+    if (pendingPharmacies) {
+      const pharmaciesArray = Array.isArray(pendingPharmacies) 
+        ? pendingPharmacies 
+        : pendingPharmacies.data || [];
+      
+      pharmaciesArray.slice(0, 2).forEach((pharmacy: any) => {
+        activities.push({
+          id: pharmacy.id + 1000,
+          type: 'pharmacy',
+          user: pharmacy.name,
+          action: 'est en attente d\'approbation',
+          time: calculateTimeAgo(pharmacy.created_at)
+        });
+      });
+    }
+
+    // Trier par date (les plus récentes d'abord)
+    activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    setRecentActivities(activities.slice(0, 5));
+  };
+
+  const calculateTimeAgo = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 60) {
+      return `Il y a ${diffMins} min`;
+    } else if (diffHours < 24) {
+      return `Il y a ${diffHours} h`;
+    } else {
+      return `Il y a ${diffDays} jours`;
+    }
+  };
+
+  const refreshDashboard = () => {
+    window.location.reload(); // Simple refresh
   };
 
   const StatCard = ({ 
@@ -75,7 +217,8 @@ const AdminDashboard: React.FC = () => {
     icon: Icon, 
     color, 
     change, 
-    changeType 
+    changeType,
+    loading: cardLoading = false
   }: any) => (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -85,21 +228,31 @@ const AdminDashboard: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-500 font-medium">{title}</p>
-          <p className="text-3xl font-bold mt-2">{value.toLocaleString()}</p>
-          {change && (
-            <div className="flex items-center mt-2">
-              {changeType === 'increase' ? (
-                <ArrowUpRight className="h-4 w-4 text-green-500 mr-1" />
-              ) : (
-                <ArrowDownRight className="h-4 w-4 text-red-500 mr-1" />
+          {cardLoading ? (
+            <div className="h-8 w-24 bg-gray-200 animate-pulse rounded mt-2"></div>
+          ) : (
+            <>
+              <p className="text-3xl font-bold mt-2">
+                {typeof value === 'number' 
+                  ? value.toLocaleString() 
+                  : value}
+              </p>
+              {change && (
+                <div className="flex items-center mt-2">
+                  {changeType === 'increase' ? (
+                    <ArrowUpRight className="h-4 w-4 text-green-500 mr-1" />
+                  ) : (
+                    <ArrowDownRight className="h-4 w-4 text-red-500 mr-1" />
+                  )}
+                  <span className={`text-sm font-medium ${
+                    changeType === 'increase' ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {change}%
+                  </span>
+                  <span className="text-sm text-gray-500 ml-2">vs mois dernier</span>
+                </div>
               )}
-              <span className={`text-sm font-medium ${
-                changeType === 'increase' ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {change}%
-              </span>
-              <span className="text-sm text-gray-500 ml-2">vs mois dernier</span>
-            </div>
+            </>
           )}
         </div>
         <div className={`h-12 w-12 rounded-lg ${color} flex items-center justify-center`}>
@@ -109,7 +262,7 @@ const AdminDashboard: React.FC = () => {
     </motion.div>
   );
 
-  if (loading) {
+  if (loading || statsLoading || ordersLoading) {
     return (
       <div className="p-6">
         <div className="text-center py-12">
@@ -148,7 +301,7 @@ const AdminDashboard: React.FC = () => {
               })}
             </span>
             <button
-              onClick={fetchDashboardData}
+              onClick={refreshDashboard}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center"
             >
               <Activity className="h-4 w-4 mr-2" />
@@ -158,42 +311,76 @@ const AdminDashboard: React.FC = () => {
         </div>
       </motion.div>
 
+      {/* Alertes importantes */}
+      {dashboardStats.pendingPharmacies > 0 && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="mb-6"
+        >
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+            <div className="flex items-center">
+              <AlertCircle className="h-5 w-5 text-yellow-600 mr-3" />
+              <div>
+                <p className="font-medium text-yellow-800">
+                  {dashboardStats.pendingPharmacies} pharmacie(s) en attente d'approbation
+                </p>
+                <p className="text-sm text-yellow-700 mt-1">
+                  <Link to="/admin/pharmacies" className="underline hover:text-yellow-900">
+                    Cliquez ici pour les examiner →
+                  </Link>
+                </p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatCard
           title="Utilisateurs totaux"
-          value={stats.totalUsers}
+          value={dashboardStats.totalUsers}
           icon={Users}
           color="bg-blue-500"
           change="12"
           changeType="increase"
+          loading={loading}
         />
         
         <StatCard
           title="Pharmacies"
-          value={stats.totalPharmacies}
+          value={dashboardStats.totalPharmacies}
           icon={Building}
           color="bg-green-500"
           change="8"
           changeType="increase"
+          loading={loading}
+          subtitle={
+            <div className="text-sm text-gray-500 mt-1">
+              {dashboardStats.activePharmacies} actives • {dashboardStats.inactivePharmacies} inactives
+            </div>
+          }
         />
         
         <StatCard
           title="Commandes totales"
-          value={stats.totalOrders}
+          value={dashboardStats.totalOrders}
           icon={ShoppingCart}
           color="bg-purple-500"
           change="15"
           changeType="increase"
+          loading={loading}
         />
         
         <StatCard
           title="Revenu total"
-          value={`${(stats.totalRevenue / 1000000).toFixed(1)}M`}
+          value={`${(dashboardStats.totalRevenue / 1000000).toFixed(1)}M FCFA`}
           icon={DollarSign}
           color="bg-yellow-500"
           change="18"
           changeType="increase"
+          loading={loading}
         />
       </div>
 
@@ -220,12 +407,16 @@ const AdminDashboard: React.FC = () => {
             <div>
               <div className="flex justify-between text-sm text-gray-600 mb-1">
                 <span>Utilisateurs actifs</span>
-                <span className="font-medium">{stats.activeUsers}</span>
+                <span className="font-medium">{dashboardStats.activeUsers.toLocaleString()}</span>
               </div>
               <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-green-500 rounded-full"
-                  style={{ width: `${(stats.activeUsers / stats.totalUsers) * 100}%` }}
+                  style={{ 
+                    width: `${dashboardStats.totalUsers > 0 
+                      ? (dashboardStats.activeUsers / dashboardStats.totalUsers) * 100 
+                      : 0}%` 
+                  }}
                 ></div>
               </div>
             </div>
@@ -233,12 +424,37 @@ const AdminDashboard: React.FC = () => {
             <div>
               <div className="flex justify-between text-sm text-gray-600 mb-1">
                 <span>Pharmacies en attente</span>
-                <span className="font-medium text-yellow-600">{stats.pendingPharmacies}</span>
+                <span className="font-medium text-yellow-600">
+                  {dashboardStats.pendingPharmacies.toLocaleString()}
+                </span>
               </div>
               <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-yellow-500 rounded-full"
-                  style={{ width: `${(stats.pendingPharmacies / stats.totalPharmacies) * 100}%` }}
+                  style={{ 
+                    width: `${dashboardStats.totalPharmacies > 0 
+                      ? (dashboardStats.pendingPharmacies / dashboardStats.totalPharmacies) * 100 
+                      : 0}%` 
+                  }}
+                ></div>
+              </div>
+            </div>
+            
+            <div>
+              <div className="flex justify-between text-sm text-gray-600 mb-1">
+                <span>Pharmacies de garde</span>
+                <span className="font-medium text-red-600">
+                  {dashboardStats.pharmaciesGarde.toLocaleString()}
+                </span>
+              </div>
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-red-500 rounded-full"
+                  style={{ 
+                    width: `${dashboardStats.totalPharmacies > 0 
+                      ? (dashboardStats.pharmaciesGarde / dashboardStats.totalPharmacies) * 100 
+                      : 0}%` 
+                  }}
                 ></div>
               </div>
             </div>
@@ -246,12 +462,16 @@ const AdminDashboard: React.FC = () => {
             <div>
               <div className="flex justify-between text-sm text-gray-600 mb-1">
                 <span>Commandes aujourd'hui</span>
-                <span className="font-medium">{stats.todayOrders}</span>
+                <span className="font-medium">{dashboardStats.todayOrders.toLocaleString()}</span>
               </div>
               <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-blue-500 rounded-full"
-                  style={{ width: `${(stats.todayOrders / 100) * 100}%` }}
+                  style={{ 
+                    width: `${dashboardStats.totalOrders > 0 
+                      ? (dashboardStats.todayOrders / dashboardStats.totalOrders) * 100 
+                      : 0}%` 
+                  }}
                 ></div>
               </div>
             </div>
@@ -259,12 +479,16 @@ const AdminDashboard: React.FC = () => {
             <div>
               <div className="flex justify-between text-sm text-gray-600 mb-1">
                 <span>Revenu aujourd'hui</span>
-                <span className="font-medium">{stats.todayRevenue.toLocaleString()} FCFA</span>
+                <span className="font-medium">{dashboardStats.todayRevenue.toLocaleString()} FCFA</span>
               </div>
               <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-purple-500 rounded-full"
-                  style={{ width: `${(stats.todayRevenue / 1000000) * 100}%` }}
+                  style={{ 
+                    width: `${dashboardStats.totalRevenue > 0 
+                      ? (dashboardStats.todayRevenue / dashboardStats.totalRevenue) * 100 
+                      : 0}%` 
+                  }}
                 ></div>
               </div>
             </div>
@@ -283,33 +507,39 @@ const AdminDashboard: React.FC = () => {
           </h3>
           
           <div className="space-y-4">
-            {recentActivities.map((activity) => (
-              <div key={activity.id} className="flex items-start space-x-3">
-                <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  activity.type === 'order' ? 'bg-purple-100' :
-                  activity.type === 'user' ? 'bg-blue-100' :
-                  activity.type === 'pharmacy' ? 'bg-green-100' :
-                  activity.type === 'payment' ? 'bg-yellow-100' :
-                  'bg-red-100'
-                }`}>
-                  {activity.type === 'order' && <ShoppingCart className="h-4 w-4 text-purple-600" />}
-                  {activity.type === 'user' && <Users className="h-4 w-4 text-blue-600" />}
-                  {activity.type === 'pharmacy' && <Building className="h-4 w-4 text-green-600" />}
-                  {activity.type === 'payment' && <DollarSign className="h-4 w-4 text-yellow-600" />}
-                  {activity.type === 'delivery' && <Truck className="h-4 w-4 text-red-600" />}
-                </div>
-                
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900">
-                    {activity.user} <span className="font-normal text-gray-600">{activity.action}</span>
-                  </p>
-                  {activity.amount && (
-                    <p className="text-sm text-gray-500">{activity.amount.toLocaleString()} FCFA</p>
-                  )}
-                  <p className="text-xs text-gray-400 mt-1">{activity.time}</p>
-                </div>
+            {recentActivities.length === 0 ? (
+              <div className="text-center py-4 text-gray-500">
+                <p>Aucune activité récente</p>
               </div>
-            ))}
+            ) : (
+              recentActivities.map((activity) => (
+                <div key={activity.id} className="flex items-start space-x-3">
+                  <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    activity.type === 'order' ? 'bg-purple-100' :
+                    activity.type === 'user' ? 'bg-blue-100' :
+                    activity.type === 'pharmacy' ? 'bg-green-100' :
+                    activity.type === 'payment' ? 'bg-yellow-100' :
+                    'bg-red-100'
+                  }`}>
+                    {activity.type === 'order' && <ShoppingCart className="h-4 w-4 text-purple-600" />}
+                    {activity.type === 'user' && <Users className="h-4 w-4 text-blue-600" />}
+                    {activity.type === 'pharmacy' && <Building className="h-4 w-4 text-green-600" />}
+                    {activity.type === 'payment' && <DollarSign className="h-4 w-4 text-yellow-600" />}
+                    {activity.type === 'delivery' && <Truck className="h-4 w-4 text-red-600" />}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {activity.user} <span className="font-normal text-gray-600">{activity.action}</span>
+                    </p>
+                    {activity.amount && (
+                      <p className="text-sm text-gray-500">{activity.amount.toLocaleString()} FCFA</p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1">{activity.time}</p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
           
           <Link
@@ -332,46 +562,58 @@ const AdminDashboard: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link
             to="/admin/users"
-            className="bg-white p-4 rounded-lg hover:shadow-md transition-shadow border border-gray-200"
+            className="bg-white p-4 rounded-lg hover:shadow-md transition-shadow border border-gray-200 hover:border-blue-300"
           >
             <div className="flex items-center">
               <Users className="h-5 w-5 text-blue-600 mr-3" />
               <div>
                 <p className="font-medium">Gérer utilisateurs</p>
-                <p className="text-sm text-gray-600">Ajouter, modifier, supprimer</p>
+                <p className="text-sm text-gray-600">
+                  {dashboardStats.totalUsers} utilisateurs
+                </p>
               </div>
             </div>
           </Link>
           
           <Link
             to="/admin/pharmacies"
-            className="bg-white p-4 rounded-lg hover:shadow-md transition-shadow border border-gray-200"
+            className="bg-white p-4 rounded-lg hover:shadow-md transition-shadow border border-gray-200 hover:border-green-300"
           >
             <div className="flex items-center">
               <Building className="h-5 w-5 text-green-600 mr-3" />
               <div>
                 <p className="font-medium">Gérer pharmacies</p>
-                <p className="text-sm text-gray-600">Approuver, suspendre</p>
+                <p className="text-sm text-gray-600">
+                  {dashboardStats.pendingPharmacies > 0 ? (
+                    <span className="text-yellow-600 font-medium">
+                      {dashboardStats.pendingPharmacies} en attente
+                    </span>
+                  ) : (
+                    `${dashboardStats.totalPharmacies} pharmacies`
+                  )}
+                </p>
               </div>
             </div>
           </Link>
           
           <Link
             to="/admin/statistics"
-            className="bg-white p-4 rounded-lg hover:shadow-md transition-shadow border border-gray-200"
+            className="bg-white p-4 rounded-lg hover:shadow-md transition-shadow border border-gray-200 hover:border-purple-300"
           >
             <div className="flex items-center">
               <TrendingUp className="h-5 w-5 text-purple-600 mr-3" />
               <div>
-                <p className="font-medium">Voir statistiques</p>
-                <p className="text-sm text-gray-600">Analyses détaillées</p>
+                <p className="font-medium">Statistiques détaillées</p>
+                <p className="text-sm text-gray-600">
+                  {dashboardStats.totalOrders} commandes
+                </p>
               </div>
             </div>
           </Link>
           
           <Link
-            to="/admin/settings"
-            className="bg-white p-4 rounded-lg hover:shadow-md transition-shadow border border-gray-200"
+            to="/admin/dashboard"
+            className="bg-white p-4 rounded-lg hover:shadow-md transition-shadow border border-gray-200 hover:border-yellow-300"
           >
             <div className="flex items-center">
               <Package className="h-5 w-5 text-yellow-600 mr-3" />
