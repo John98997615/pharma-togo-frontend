@@ -219,33 +219,6 @@ const PharmacienDashboard: React.FC = () => {
     }
   };
 
-  // // Debug panel (à enlever en production)
-  // const DebugPanel = () => (
-  //   <div className="mb-4 bg-gray-900 text-white p-4 rounded-lg text-xs">
-  //     <div className="flex justify-between items-center mb-2">
-  //       <strong>Debug Information</strong>
-  //       <button 
-  //         onClick={() => {
-  //           console.log('User:', user);
-  //           console.log('Pharmacy:', pharmacy);
-  //           console.log('LocalStorage User:', localStorage.getItem('user'));
-  //         }}
-  //         className="px-2 py-1 bg-blue-600 rounded text-xs"
-  //       >
-  //         Log Console
-  //       </button>
-  //     </div>
-  //     <div className="grid grid-cols-2 gap-2">
-  //       <div>User ID: <span className="text-yellow-300">{user?.id}</span></div>
-  //       <div>User Role: <span className="text-yellow-300">{user?.role}</span></div>
-  //       <div>Pharmacy Found: <span className={pharmacy ? "text-green-300" : "text-red-300"}>{pharmacy ? 'YES' : 'NO'}</span></div>
-  //       <div>Pharmacy ID: <span className="text-yellow-300">{pharmacy?.id}</span></div>
-  //       <div>Retry Count: <span className="text-yellow-300">{retryCount}</span></div>
-  //       <div>Loading: <span className="text-yellow-300">{loadingPharmacy ? 'YES' : 'NO'}</span></div>
-  //     </div>
-  //   </div>
-  // );
-
   // Afficher l'état de chargement
   if (loadingPharmacy) {
     return (
@@ -402,7 +375,7 @@ const PharmacienDashboard: React.FC = () => {
             </div>
             <p className="text-gray-500 mt-1">{pharmacy.address}</p>
             <p className="text-sm text-gray-400 mt-1">
-              ID: {pharmacy.id} • Créée le: {new Date(pharmacy.created_at).toLocaleDateString()}
+               • Créée le: {new Date(pharmacy.created_at).toLocaleDateString()}
             </p>
           </div>
 
@@ -419,7 +392,7 @@ const PharmacienDashboard: React.FC = () => {
             </button>
 
             <Link
-              to="/pharmacien/pharmacy/edit"
+              to="/pharmacien/settings"
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center"
             >
               <Settings className="h-4 w-4 mr-2" />
@@ -435,7 +408,7 @@ const PharmacienDashboard: React.FC = () => {
           <Store className="h-5 w-5 text-green-600 mr-3" />
           <div>
             <span className="font-bold text-green-700">
-              ✅ Pharmacie chargée avec succès !
+              Pharmacie chargée avec succès !
             </span>
             <p className="text-green-600 text-sm mt-1">
               Bienvenue dans votre espace pharmacien. Vous pouvez maintenant gérer vos médicaments et commandes.
@@ -742,7 +715,7 @@ const PharmacienDashboard: React.FC = () => {
         <h3 className="text-lg font-bold mb-4">Actions rapides</h3>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Link
-            to="/pharmacien/medicaments/new"
+            to="/pharmacien/medicaments"
             className="bg-white p-4 rounded-lg hover:shadow-md transition-shadow border border-gray-200"
           >
             <div className="flex items-center">

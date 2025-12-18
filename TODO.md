@@ -1,40 +1,40 @@
-# Plan de Correction des Erreurs TypeScript
+# Plan de résolution - Unification du système de panier
 
-## Erreurs Identifiées
+## Problème identifié
+- **MedicamentsPage** utilise le hook `useCart()` (Redux Store) 
+- **CartPage** utilise un système localStorage (`cart_${user.id}`)
+- **cart.slice.ts** sauvegarde dans localStorage avec la clé `pharma_cart`
+- **Incohérence :** Les données sont ajoutées dans Redux mais recherchées dans localStorage
 
-### 1. PharmacienDashboard.tsx:55:30 - TS18048: 'user.pharmacy' is possibly 'undefined'
-- **Problème**: Accès à `user.pharmacy.id` sans vérification null
-- **Solution**: Ajouter une vérification null avant d'accéder à `pharmacy.id`
+## Solution : Unifier avec Redux Store
 
-### 2. PharmacyCreatePage.tsx:76:53 - TS2345: Type mismatch for FormData
-- **Problème**: La méthode `create()` attend `FormData | Partial<Pharmacy>` mais reçoit `PharmacyFormData`
-- **Solution**: S'assurer que les données sont converties en FormData correctement
+### Étapes à suivre :
 
-### 3. SearchPage.tsx:135:76 et 136:35 - TS2339: Property 'data' does not exist on type 'never'
-- **Problème**: TypeScript infère `categoriesResponse` comme `never`, les guards de type ne fonctionnent pas
-- **Solution**: Réviser la logique de vérification des types pour les catégories
 
-## Plan d'Action
+#### 1. Modifier CartPage.tsx
+- [x] Remplacer le système localStorage par le hook `useCart()`
+- [x] Utiliser `items`, `totalItems`, `totalPrice` du Redux Store
+- [x] Utiliser `updateItemQuantity` et `removeItemFromCart` du hook
+- [x] Conserver la même interface utilisateur
+- [x] Conserver la logique de groupement par pharmacie
+- [x] Charger le panier au montage avec `loadCart()`
 
-1. **Corriger PharmacienDashboard.tsx** - Ajouter vérification null pour `user.pharmacy`
-2. **Corriger PharmacyCreatePage.tsx** - S'assurer de la conversion correcte en FormData
-3. **Corriger SearchPage.tsx** - Réviser la logique de vérification des types pour les catégories
-4. **Tester les corrections** - Compiler le projet pour vérifier la résolution des erreurs
+#### 2. Tester la cohérence
+- [ ] Vérifier que l'ajout d'un produit depuis MedicamentsPage apparaît dans CartPage
+- [ ] Vérifier que les modifications de quantité fonctionnent
+- [ ] Vérifier que la suppression fonctionne
+- [ ] Vérifier les totaux et calculs
 
-## Étapes Détaillées
+#### 3. Nettoyage
+- [ ] Supprimer le code localStorage obsolète dans CartPage
+- [ ] Vérifier que tous les composants utilisent le même système
+- [ ] S'assurer que la persistance localStorage fonctionne via Redux
 
-### Étape 1: PharmacienDashboard.tsx
-- Localiser la ligne 55 avec `const pharmacyId = user.pharmacy.id;`
-- Ajouter une vérification null: `if (user?.pharmacy?.id) { ... }`
+## Fichiers à modifier :
+- `src/pages/dashboard/client/CartPage.tsx` - Principale modification
 
-### Étape 2: PharmacyCreatePage.tsx  
-- Vérifier la méthode `createPharmacy()`
-- S'assurer que `data` est converti en FormData avant l'appel à `pharmacyService.create()`
-
-### Étape 3: SearchPage.tsx
-- Réviser la fonction de gestion des catégories
-- Améliorer les guards de type pour éviter l'inférence `never`
-
-### Étape 4: Test de Compilation
-- Lancer `npm run build` ou `npm run type-check`
-- Vérifier que toutes les erreurs sont résolues
+## Résultat attendu :
+✅ Un système de panier unifié utilisant Redux Store
+✅ Cohérence entre tous les composants
+✅ Persistance des données via localStorage (via Redux)
+✅ Pas de perte de fonctionnalités existantes

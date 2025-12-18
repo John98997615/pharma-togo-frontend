@@ -22,8 +22,8 @@ const medicamentSchema = z.object({
   price: z.number().min(1, 'Le prix doit être supérieur à 0'),
   quantity: z.number().min(0, 'La quantité ne peut pas être négative'),
   category_id: z.number().min(1, 'Sélectionnez une catégorie'),
-  form: z.string().optional(),
-  dosage: z.string().optional(),
+  form: z.string().min(1, 'La forme est requise'),
+  dosage: z.string().min(1, 'Le dosage est requis'),
   requires_prescription: z.boolean().default(false),
   image: z.any().optional(),
   is_active: z.boolean().default(true),
@@ -84,9 +84,11 @@ const MedicamentForm: React.FC<MedicamentFormProps> = ({
 
   // Gérer la prévisualisation de l'image
   useEffect(() => {
-    if (imageFile && imageFile.length > 0) {
+  if (imageFile) {
+    // Cas 1: C'est un FileList (nouvelle image uploadée)
+    if (imageFile instanceof FileList && imageFile.length > 0) {
       const file = imageFile[0];
-      if (file) {
+      if (file instanceof File) {
         const reader = new FileReader();
         reader.onloadend = () => {
           setImagePreview(reader.result as string);
@@ -94,17 +96,29 @@ const MedicamentForm: React.FC<MedicamentFormProps> = ({
         reader.readAsDataURL(file);
       }
     }
-  }, [imageFile]);
+    // Cas 2: C'est déjà une URL string (image existante)
+    else if (typeof imageFile === 'string') {
+      setImagePreview(imageFile);
+    }
+  }
+}, [imageFile]);
 
   // Réinitialiser le formulaire avec les données initiales
   useEffect(() => {
-    if (initialData) {
-      reset(initialData);
-      if (initialData.image && typeof initialData.image === 'string') {
+  if (initialData) {
+    reset(initialData);
+    if (initialData.image) {
+      // Si c'est une URL string
+      if (typeof initialData.image === 'string') {
         setImagePreview(initialData.image);
       }
+      // Si c'est un objet avec une propriété url
+      else if (initialData.image.url) {
+        setImagePreview(initialData.image.url);
+      }
     }
-  }, [initialData, reset]);
+  }
+}, [initialData, reset]);
 
   const handleFormSubmit = async (data: MedicamentFormData) => {
     const formData = new FormData();
@@ -115,10 +129,10 @@ const MedicamentForm: React.FC<MedicamentFormProps> = ({
     formData.append('price', data.price.toString());
     formData.append('quantity', data.quantity.toString());
     formData.append('category_id', data.category_id.toString());
-    if (data.form) formData.append('form', data.form);
-    if (data.dosage) formData.append('dosage', data.dosage);
-    formData.append('requires_prescription', data.requires_prescription.toString());
-    formData.append('is_active', data.is_active.toString());
+    formData.append('form', data.form || '');
+    formData.append('dosage', data.dosage || '');
+    formData.append('requires_prescription', data.requires_prescription ? '1' : '0');
+    formData.append('is_active', data.is_active ? '1' : '0');
     
     // Ajouter l'image si elle existe
     if (data.image && data.image.length > 0) {

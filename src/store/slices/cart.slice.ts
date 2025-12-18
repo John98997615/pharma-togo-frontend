@@ -6,6 +6,7 @@ export interface CartItem {
   medicament: Medicament;
   quantity: number;
   pharmacy_id: number;
+  pharmacy_name: string; // Ajouté
   added_at: string;
 }
 
@@ -45,6 +46,7 @@ const cartSlice = createSlice({
           medicament,
           quantity,
           pharmacy_id: medicament.pharmacy_id,
+          pharmacy_name: medicament.pharmacy?.name || 'Pharmacie', // Ajouté
           added_at: new Date().toISOString(),
         });
       }
@@ -123,6 +125,7 @@ const cartSlice = createSlice({
           state.lastUpdated = parsedCart.lastUpdated || null;
         } catch (error) {
           console.error('Erreur lors du chargement du panier:', error);
+          localStorage.removeItem('pharma_cart');
         }
       }
     },

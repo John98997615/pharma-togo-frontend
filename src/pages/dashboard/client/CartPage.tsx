@@ -1,5 +1,5 @@
 // src/pages/dashboard/client/CartPage.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   ShoppingCart, 
@@ -8,181 +8,93 @@ import {
   Minus, 
   ArrowRight,
   Package,
-  AlertCircle,
   Store,
-  Truck
+  Truck,
+  AlertTriangle,
+  MapPin,
+  Smartphone
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../context/AuthContext';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCart } from '../../../hooks/useCart';
+import { commandeService } from '../../../services/api/commande.service';
+import { medicamentService } from '../../../services/api/medicament.service';
 
 // Types
-interface CartItem {
-  id: number;
-  medicament_id: number;
-  quantity: number;
-  medicament: {
-    id: number;
-    name: string;
-    description?: string;
-    price: number;
-    image?: string;
-    pharmacy: {
-      id: number;
-      name: string;
-      address: string;
-      phone: string;
-    };
-    category?: {
-      id: number;
-      name: string;
-    };
-  };
-  created_at: string;
-  updated_at: string;
-}
-
-interface PharmacySummary {
+interface PharmacyGroup {
   id: number;
   name: string;
   address: string;
   phone: string;
-  items: CartItem[];
+  items: any[];
   subtotal: number;
-}
-
-interface OrderItem {
-  medicament_id: number;
-  quantity: number;
-  price: number;
-  name: string;
 }
 
 const CartPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const queryClient = useQueryClient();
-  
-  // Récupérer le panier depuis l'API
   const { 
-    data: cartItems = [], 
-    isLoading, 
-    error 
-  } = useQuery<CartItem[]>({
-    queryKey: ['cart', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      
-      try {
-        // Récupérer le panier depuis localStorage ou API
-        const storedCart = localStorage.getItem(`cart_${user.id}`);
-        
-        if (storedCart) {
-          return JSON.parse(storedCart) as CartItem[];
-        }
-        
-        // Si pas de panier stocké, retourner tableau vide
-        return [];
-      } catch (error) {
-        console.error('Error fetching cart:', error);
-        return [];
-      }
-    },
-    enabled: !!user,
-  });
+    items, 
+    totalItems, 
+    totalPrice, 
+    updateItemQuantity, 
+    removeItemFromCart,
+    emptyCart,
+    loadCart
+  } = useCart();
+  
+  const [pharmacyGroups, setPharmacyGroups] = useState<PharmacyGroup[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState(user?.address || '');
+  const [deliveryPhone, setDeliveryPhone] = useState(user?.phone || '');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'mobile_money' | 'carte'>('mobile_money');
 
-  // Mutation pour mettre à jour la quantité
-  const updateQuantityMutation = useMutation({
-    mutationFn: async ({ itemId, quantity }: { itemId: number; quantity: number }) => {
-      // Simuler un appel API
-      return new Promise<CartItem>((resolve) => {
-        setTimeout(() => {
-          resolve({
-            id: itemId,
-            medicament_id: itemId,
-            quantity,
-            medicament: {
-              id: itemId,
-              name: 'Médicament',
-              price: 1000,
-              pharmacy: {
-                id: 1,
-                name: 'Pharmacie',
-                address: '',
-                phone: ''
-              }
-            },
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-        }, 300);
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cart'] });
-    }
-  });
-
-  // Mutation pour supprimer un item
-  const removeItemMutation = useMutation({
-    mutationFn: async (itemId: number) => {
-      // Simuler un appel API
-      return new Promise<void>((resolve) => {
-        setTimeout(() => {
-          resolve();
-        }, 300);
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cart'] });
-      toast.success('Produit retiré du panier');
-    }
-  });
-
-  // Mettre à jour localStorage quand le panier change
+  // Charger le panier une seule fois au montage
   useEffect(() => {
-    if (user && cartItems.length > 0) {
-      localStorage.setItem(`cart_${user.id}`, JSON.stringify(cartItems));
-    }
-  }, [cartItems, user]);
+    loadCart();
+  }, []); // Supprimé loadCart des dépendances pour éviter la boucle
 
-  // Grouper les items par pharmacie
-  const groupItemsByPharmacy = (items: CartItem[]): PharmacySummary[] => {
-    const pharmacyMap = new Map<number, PharmacySummary>();
+  // Grouper les items par pharmacie avec useMemo pour éviter recalculs inutiles
+  const groupedPharmacies = useMemo(() => {
+    if (items.length === 0) return [];
     
-    items.forEach((item: CartItem) => {
-      const pharmacyId = item.medicament.pharmacy.id;
+    const groupsMap = new Map<number, PharmacyGroup>();
+    
+    items.forEach((item) => {
+      const pharmacyId = item.pharmacy_id || item.medicament?.pharmacy_id;
+      const pharmacyName = item.pharmacy_name || item.medicament?.pharmacy?.name || 'Pharmacie';
+      const pharmacyAddress = item.medicament?.pharmacy?.address || 'Adresse non disponible';
+      const pharmacyPhone = item.medicament?.pharmacy?.phone || 'Téléphone non disponible';
       
-      if (!pharmacyMap.has(pharmacyId)) {
-        pharmacyMap.set(pharmacyId, {
+      if (!groupsMap.has(pharmacyId)) {
+        groupsMap.set(pharmacyId, {
           id: pharmacyId,
-          name: item.medicament.pharmacy.name,
-          address: item.medicament.pharmacy.address,
-          phone: item.medicament.pharmacy.phone,
+          name: pharmacyName,
+          address: pharmacyAddress,
+          phone: pharmacyPhone,
           items: [],
           subtotal: 0
         });
       }
       
-      const pharmacy = pharmacyMap.get(pharmacyId)!;
-      pharmacy.items.push(item);
-      pharmacy.subtotal += item.medicament.price * item.quantity;
+      const group = groupsMap.get(pharmacyId)!;
+      group.items.push(item);
+      group.subtotal += (item.medicament.price * item.quantity);
     });
     
-    return Array.from(pharmacyMap.values());
-  };
+    return Array.from(groupsMap.values());
+  }, [items]);
 
-  const pharmacyGroups = groupItemsByPharmacy(cartItems);
-  const hasMultiplePharmacies = pharmacyGroups.length > 1;
+  // Mettre à jour les groupes seulement quand ils changent
+  useEffect(() => {
+    setPharmacyGroups(groupedPharmacies);
+  }, [groupedPharmacies]);
 
-  // Calculer les totaux
-  const calculateTotals = () => {
-    const cartTotal = cartItems.reduce((total: number, item: CartItem) => 
-      total + (item.medicament.price * item.quantity), 0
-    );
-    
-    const deliveryFee = 2000; // Frais de livraison fixes
-    const serviceFee = 500; // Frais de service fixes
+  // Calculer les frais
+  const totals = useMemo(() => {
+    const cartTotal = totalPrice;
+    const deliveryFee = pharmacyGroups.length > 0 ? 2000 : 0;
+    const serviceFee = cartTotal > 0 ? 500 : 0;
     const grandTotal = cartTotal + deliveryFee + serviceFee;
     
     return {
@@ -191,102 +103,123 @@ const CartPage: React.FC = () => {
       serviceFee,
       grandTotal
     };
-  };
+  }, [totalPrice, pharmacyGroups.length]);
 
-  const totals = calculateTotals();
+  const hasMultiplePharmacies = pharmacyGroups.length > 1;
 
-  // Mettre à jour la quantité
-  const updateQuantity = (itemId: number, change: number) => {
-    const item = cartItems.find((item: CartItem) => item.id === itemId);
+  // Mettre à jour la quantité avec useCallback
+  const handleUpdateQuantity = useCallback((medicamentId: number, change: number) => {
+    const item = items.find(item => item.medicament.id === medicamentId);
     if (!item) return;
 
     const newQuantity = Math.max(1, item.quantity + change);
-    updateQuantityMutation.mutate({ itemId, quantity: newQuantity });
-  };
+    updateItemQuantity(medicamentId, newQuantity);
+    toast.success('Quantité mise à jour');
+  }, [items, updateItemQuantity]);
 
-  // Supprimer un item
-  const removeItem = (itemId: number) => {
-    removeItemMutation.mutate(itemId);
-  };
+  // Supprimer un item avec useCallback
+  const handleRemoveItem = useCallback((medicamentId: number) => {
+    removeItemFromCart(medicamentId);
+    toast.success('Produit retiré du panier');
+  }, [removeItemFromCart]);
 
-  // Passer commande
-  const handleCheckout = () => {
-    if (cartItems.length === 0) {
-      toast.error('Votre panier est vide');
-      return;
-    }
+  // Vider le panier
+  const handleClearCart = useCallback(() => {
+    emptyCart();
+    toast.success('Panier vidé');
+  }, [emptyCart]);
 
-    if (hasMultiplePharmacies) {
-      toast.error('Veuillez commander d\'une seule pharmacie à la fois');
-      return;
-    }
-
-    // Préparer les données de commande
-    const pharmacyId = pharmacyGroups[0]?.id;
-    const orderItems: OrderItem[] = cartItems.map((item: CartItem) => ({
-      medicament_id: item.medicament.id,
-      quantity: item.quantity,
-      price: item.medicament.price,
-      name: item.medicament.name
-    }));
-
-    // Naviguer vers la page de commande
-    navigate('/client/commandes/new', {
-      state: {
-        pharmacyId,
-        items: orderItems,
-        pharmacy: pharmacyGroups[0]
-      }
-    });
-  };
-
-  // Ajouter au panier depuis l'API
-  const addToCartFromAPI = async (medicamentId: number, quantity: number = 1) => {
+  // Passer commande pour une pharmacie spécifique
+  const handleCheckout = async (pharmacyGroup: PharmacyGroup) => {
     if (!user) {
-      toast.error('Veuillez vous connecter pour ajouter au panier');
+      toast.error('Veuillez vous connecter pour passer commande');
+      navigate('/login');
       return;
     }
 
+    if (!deliveryAddress || !deliveryPhone) {
+      toast.error('Veuillez renseigner votre adresse et téléphone de livraison');
+      return;
+    }
+
+    setLoading(true);
     try {
-      // Ici vous appelleriez votre API
-      // Exemple: await cartService.addItem(medicamentId, quantity);
+      // Vérifier la disponibilité des médicaments
+      const availabilityPromises = pharmacyGroup.items.map(async (item) => {
+        try {
+          const medicament = await medicamentService.getById(item.medicament.id);
+          return {
+            item,
+            available: medicament.quantity >= item.quantity,
+            currentStock: medicament.quantity,
+            medicament
+          };
+        } catch (error) {
+          return {
+            item,
+            available: false,
+            currentStock: 0,
+            medicament: null
+          };
+        }
+      });
+
+      const availabilityResults = await Promise.all(availabilityPromises);
+      const unavailableItems = availabilityResults.filter(result => !result.available);
+
+      if (unavailableItems.length > 0) {
+        const itemNames = unavailableItems
+          .map(result => result.item.medicament.name)
+          .join(', ');
+        toast.error(`Produits non disponibles: ${itemNames}`);
+        setLoading(false);
+        return;
+      }
+
+      // Créer la commande
+      const commandeData = {
+        pharmacy_id: pharmacyGroup.id,
+        items: pharmacyGroup.items.map(item => ({
+          medicament_id: item.medicament.id,
+          quantity: item.quantity
+        })),
+        payment_method: paymentMethod,
+        delivery_address: deliveryAddress,
+        delivery_phone: deliveryPhone,
+        notes: `Commande pour ${pharmacyGroup.items.length} produit(s)`
+      };
+
+      const commande = await commandeService.create(commandeData);
       
-      toast.success('Produit ajouté au panier');
-    } catch (error) {
-      toast.error('Erreur lors de l\'ajout au panier');
+      // Retirer les items commandés du panier
+      pharmacyGroup.items.forEach(item => {
+        removeItemFromCart(item.medicament.id);
+      });
+      
+      toast.success('Commande passée avec succès !');
+      
+      // Rediriger vers la page de paiement
+      navigate(`/client/commandes/${commande.id}/paiement`);
+      
+    } catch (error: any) {
+      console.error('Checkout error:', error);
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.errors?.[0] || 
+                          'Erreur lors de la commande';
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Chargement de votre panier...</p>
-        </div>
-      </div>
-    );
-  }
+  // Calculer la quantité totale par pharmacie
+  const getPharmacyItemCount = useCallback((pharmacyId: number) => {
+    return items
+      .filter(item => item.pharmacy_id === pharmacyId)
+      .reduce((sum, item) => sum + item.quantity, 0);
+  }, [items]);
 
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="text-center py-12">
-          <AlertCircle className="h-16 w-16 text-red-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Erreur de chargement</h3>
-          <p className="text-gray-600 mb-6">Impossible de charger votre panier.</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-          >
-            Réessayer
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (cartItems.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="p-6">
         <div className="max-w-4xl mx-auto">
@@ -310,79 +243,106 @@ const CartPage: React.FC = () => {
   return (
     <div className="p-6">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Mon Panier</h1>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Mon Panier</h1>
+          <div className="flex items-center text-gray-600">
+            <Package className="h-5 w-5 mr-2" />
+            <span>{totalItems} article{totalItems > 1 ? 's' : ''} • {pharmacyGroups.length} pharmacie{pharmacyGroups.length > 1 ? 's' : ''}</span>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Liste des produits */}
           <div className="lg:col-span-2">
+            {/* Bouton vider panier */}
+            <div className="mb-4 flex justify-end">
+              <button
+                onClick={handleClearCart}
+                className="flex items-center text-red-600 hover:text-red-800 font-medium px-3 py-2 rounded-lg hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Vider le panier
+              </button>
+            </div>
+
+            {/* Avertissement pharmacies multiples */}
+            {hasMultiplePharmacies && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                <div className="flex items-start">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600 mr-3 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-yellow-800 mb-2">
+                      ⚠️ Commandes séparées nécessaires
+                    </p>
+                    <p className="text-sm text-yellow-700">
+                      Votre panier contient des produits de {pharmacyGroups.length} pharmacies différentes.
+                      Vous devez passer une commande séparée pour chaque pharmacie.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Pharmacies */}
-            {pharmacyGroups.map((pharmacy, index) => (
+            {pharmacyGroups.map((pharmacy) => (
               <div key={pharmacy.id} className="mb-6 bg-white rounded-xl shadow-sm border border-gray-200">
                 {/* En-tête pharmacie */}
                 <div className="p-4 border-b border-gray-200 bg-gray-50 rounded-t-xl">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center">
                       <Store className="h-5 w-5 text-blue-600 mr-2" />
                       <div>
                         <h3 className="font-bold text-gray-900">{pharmacy.name}</h3>
-                        <div className="flex items-center text-sm text-gray-600">
-                          <span>{pharmacy.address}</span>
-                          <span className="mx-2">•</span>
-                          <span>{pharmacy.phone}</span>
+                        <div className="text-sm text-gray-600">
+                          {pharmacy.items.length} produit{pharmacy.items.length > 1 ? 's' : ''} • 
+                          Total: {pharmacy.subtotal.toLocaleString()} FCFA
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-sm text-gray-600">
-                        {pharmacy.items.length} article{pharmacy.items.length > 1 ? 's' : ''}
-                      </span>
-                    </div>
+                    <button
+                      onClick={() => handleCheckout(pharmacy)}
+                      disabled={loading}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      {loading ? 'Traitement...' : 'Commander'}
+                    </button>
                   </div>
                 </div>
 
                 {/* Produits de la pharmacie */}
                 <div className="divide-y divide-gray-200">
-                  {pharmacy.items.map((item: CartItem) => (
-                    <div key={item.id} className="p-4">
-                      <div className="flex items-start space-x-4">
+                  {pharmacy.items.map((item) => (
+                    <div key={`${pharmacy.id}-${item.medicament.id}`} className="p-4">
+                      <div className="flex items-start gap-4">
                         {/* Image */}
-                        <div className="h-24 w-24 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                        <div className="h-24 w-24 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
                           {item.medicament.image ? (
                             <img
                               src={item.medicament.image}
                               alt={item.medicament.name}
-                              className="h-full w-full rounded-lg object-cover"
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.style.display = 'none';
-                                target.parentElement?.classList.add('bg-gray-100');
-                              }}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
                             />
                           ) : (
-                            <div className="h-full w-full bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg flex items-center justify-center">
+                            <div className="h-full w-full bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center">
                               <Package className="h-10 w-10 text-blue-600" />
                             </div>
                           )}
                         </div>
 
                         {/* Détails */}
-                        <div className="flex-1">
-                          <div className="flex justify-between">
-                            <div>
-                              <h3 className="font-bold text-gray-900">{item.medicament.name}</h3>
-                              {item.medicament.category && (
-                                <p className="text-sm text-gray-600 mt-1">
-                                  {item.medicament.category.name}
-                                </p>
-                              )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="min-w-0">
+                              <h3 className="font-bold text-gray-900 truncate">{item.medicament.name}</h3>
                               <p className="text-lg font-bold text-blue-600 mt-2">
                                 {item.medicament.price.toLocaleString()} FCFA
                               </p>
                             </div>
                             <button
-                              onClick={() => removeItem(item.id)}
-                              className="text-red-600 hover:text-red-800 p-1"
-                              disabled={removeItemMutation.isPending}
+                              onClick={() => handleRemoveItem(item.medicament.id)}
+                              className="text-red-600 hover:text-red-800 p-1 flex-shrink-0"
+                              title="Supprimer"
                             >
                               <Trash2 className="h-5 w-5" />
                             </button>
@@ -390,11 +350,11 @@ const CartPage: React.FC = () => {
 
                           <div className="flex items-center justify-between mt-4">
                             {/* Quantité */}
-                            <div className="flex items-center space-x-3">
+                            <div className="flex items-center gap-3">
                               <button
-                                onClick={() => updateQuantity(item.id, -1)}
-                                disabled={updateQuantityMutation.isPending}
-                                className="h-8 w-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50"
+                                onClick={() => handleUpdateQuantity(item.medicament.id, -1)}
+                                className="h-8 w-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                                aria-label="Diminuer la quantité"
                               >
                                 <Minus className="h-4 w-4" />
                               </button>
@@ -402,9 +362,9 @@ const CartPage: React.FC = () => {
                                 {item.quantity}
                               </span>
                               <button
-                                onClick={() => updateQuantity(item.id, 1)}
-                                disabled={updateQuantityMutation.isPending}
-                                className="h-8 w-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50"
+                                onClick={() => handleUpdateQuantity(item.medicament.id, 1)}
+                                className="h-8 w-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors"
+                                aria-label="Augmenter la quantité"
                               >
                                 <Plus className="h-4 w-4" />
                               </button>
@@ -434,56 +394,68 @@ const CartPage: React.FC = () => {
                 </div>
               </div>
             ))}
-
-            {/* Avertissement pharmacies multiples */}
-            {hasMultiplePharmacies && (
-              <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                <div className="flex items-center">
-                  <AlertCircle className="h-5 w-5 text-yellow-600 mr-3 flex-shrink-0" />
-                  <div>
-                    <p className="font-medium text-yellow-800">
-                      ⚠️ Commandes multiples nécessaires
-                    </p>
-                    <p className="text-sm text-yellow-700 mt-1">
-                      Vous avez des produits de {pharmacyGroups.length} pharmacies différentes.
-                      Pour commander, vous devrez passer une commande séparée pour chaque pharmacie.
-                    </p>
-                    <div className="mt-3 space-y-2">
-                      {pharmacyGroups.map((pharmacy, index) => (
-                        <div key={pharmacy.id} className="flex items-center justify-between bg-white/50 p-2 rounded">
-                          <div className="flex items-center">
-                            <Store className="h-4 w-4 text-gray-500 mr-2" />
-                            <span className="text-sm font-medium">{pharmacy.name}</span>
-                          </div>
-                          <span className="text-sm font-bold">
-                            {pharmacy.items.length} article{pharmacy.items.length > 1 ? 's' : ''}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Récapitulatif */}
-          <div>
+          <div className="lg:col-span-1">
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 sticky top-6">
               <div className="p-6 border-b border-gray-200">
                 <h2 className="text-lg font-bold">Récapitulatif de commande</h2>
               </div>
 
               <div className="p-6">
-                {/* Statistiques */}
+                {/* Informations livraison */}
                 <div className="mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-gray-600">Total articles</span>
-                    <span className="font-medium">{cartItems.length}</span>
-                  </div>
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-gray-600">Pharmacies</span>
-                    <span className="font-medium">{pharmacyGroups.length}</span>
+                  <h3 className="font-medium text-gray-900 mb-3 flex items-center">
+                    <MapPin className="h-5 w-5 mr-2 text-blue-600 flex-shrink-0" />
+                    <span>Adresse de livraison</span>
+                  </h3>
+                  <input
+                    type="text"
+                    value={deliveryAddress}
+                    onChange={(e) => setDeliveryAddress(e.target.value)}
+                    placeholder="Votre adresse complète"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                  <input
+                    type="tel"
+                    value={deliveryPhone}
+                    onChange={(e) => setDeliveryPhone(e.target.value)}
+                    placeholder="Votre téléphone"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Méthode de paiement */}
+                <div className="mb-6">
+                  <h3 className="font-medium text-gray-900 mb-3 flex items-center">
+                    <Smartphone className="h-5 w-5 mr-2 text-green-600 flex-shrink-0" />
+                    <span>Méthode de paiement</span>
+                  </h3>
+                  <div className="space-y-2">
+                    <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="mobile_money"
+                        checked={paymentMethod === 'mobile_money'}
+                        onChange={() => setPaymentMethod('mobile_money')}
+                        className="mr-3"
+                      />
+                      <span>Mobile Money</span>
+                    </label>
+                    
+                    <label className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                      <input
+                        type="radio"
+                        name="payment"
+                        value="cash"
+                        checked={paymentMethod === 'cash'}
+                        onChange={() => setPaymentMethod('cash')}
+                        className="mr-3"
+                      />
+                      <span>Paiement à la livraison</span>
+                    </label>
                   </div>
                 </div>
 
@@ -516,49 +488,35 @@ const CartPage: React.FC = () => {
                     <div>
                       <p className="text-sm text-blue-700 font-medium">Livraison estimée</p>
                       <p className="text-xs text-blue-600 mt-1">
-                        Délai: 1-2 heures • Frais de livraison: {totals.deliveryFee.toLocaleString()} FCFA
+                        Délai: 1-2 heures • Frais fixes par pharmacie
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Boutons d'action */}
-                <div className="space-y-3">
-                  {hasMultiplePharmacies ? (
-                    <>
-                      <button
-                        disabled
-                        className="w-full py-3 bg-gray-300 text-gray-500 rounded-lg font-medium cursor-not-allowed"
-                      >
-                        Commander par pharmacie
-                      </button>
-                      <p className="text-sm text-gray-500 text-center">
-                        Veuillez commander chaque pharmacie séparément
-                      </p>
-                    </>
-                  ) : (
-                    <button
-                      onClick={handleCheckout}
-                      disabled={cartItems.length === 0}
-                      className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                    >
-                      Passer la commande
-                      <ArrowRight className="h-5 w-5 ml-2" />
-                    </button>
-                  )}
-                </div>
+                {/* Bouton commander tout */}
+                {!hasMultiplePharmacies && pharmacyGroups.length > 0 && (
+                  <button
+                    onClick={() => handleCheckout(pharmacyGroups[0])}
+                    disabled={loading || items.length === 0}
+                    className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mb-4 transition-colors"
+                  >
+                    {loading ? 'Traitement...' : 'Commander tout'}
+                    <ArrowRight className="h-5 w-5 ml-2" />
+                  </button>
+                )}
 
                 {/* Liens utiles */}
-                <div className="mt-6 pt-6 border-t border-gray-200 space-y-3">
+                <div className="pt-6 border-t border-gray-200 space-y-3">
                   <Link
                     to="/medicaments"
-                    className="block text-center text-blue-600 hover:text-blue-800 font-medium"
+                    className="block text-center text-blue-600 hover:text-blue-800 font-medium transition-colors"
                   >
                     ← Continuer mes achats
                   </Link>
                   <Link
                     to="/client/commandes"
-                    className="block text-center text-gray-600 hover:text-gray-800"
+                    className="block text-center text-gray-600 hover:text-gray-800 transition-colors"
                   >
                     Voir mes commandes
                   </Link>
@@ -566,16 +524,23 @@ const CartPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Suggestions */}
-            {pharmacyGroups.length === 1 && (
-              <div className="mt-6 bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-4">
-                <h4 className="font-medium text-blue-800 mb-2">Livraison rapide</h4>
-                <p className="text-sm text-blue-700">
-                  Votre commande de <span className="font-bold">{pharmacyGroups[0].name}</span> 
-                  sera livrée dans un délai de 1-2 heures.
-                </p>
+            {/* Résumé pharmacies */}
+            <div className="mt-6 bg-gray-50 rounded-xl p-4">
+              <h4 className="font-medium text-gray-900 mb-3">Vos pharmacies</h4>
+              <div className="space-y-3">
+                {pharmacyGroups.map((pharmacy) => (
+                  <div key={`summary-${pharmacy.id}`} className="flex items-center justify-between p-2 bg-white rounded-lg">
+                    <div className="flex items-center min-w-0">
+                      <Store className="h-4 w-4 text-gray-500 mr-2 flex-shrink-0" />
+                      <span className="text-sm font-medium truncate">{pharmacy.name}</span>
+                    </div>
+                    <span className="text-sm font-bold whitespace-nowrap">
+                      {getPharmacyItemCount(pharmacy.id)} article{getPharmacyItemCount(pharmacy.id) > 1 ? 's' : ''}
+                    </span>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>

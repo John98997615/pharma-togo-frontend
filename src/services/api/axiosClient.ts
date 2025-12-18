@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const API_URL = `${API_BASE_URL}/api`;
+const API_URL = `${API_BASE_URL}`;
 
 // Variable pour suivre l'état CSRF
 let csrfTokenRetrieved = false;

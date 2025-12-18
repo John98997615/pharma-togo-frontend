@@ -1,3 +1,4 @@
+// src/pages/public/MedicamentsPage.tsx
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
@@ -8,6 +9,8 @@ import {
 import { medicamentService } from '../../services/api/medicament.service';
 import { categoryService } from '../../services/api/category.service';
 import { Medicament } from '../../types/medicament.types';
+import { useCart } from '../../hooks/useCart';
+import { toast } from 'react-hot-toast';
 
 const MedicamentsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -19,6 +22,9 @@ const MedicamentsPage: React.FC = () => {
     maxPrice: searchParams.get('maxPrice') || '',
     sortBy: searchParams.get('sortBy') || 'popular',
   });
+
+  // Utiliser le hook useCart
+  const { addItemToCart, canAddToCart, getItemQuantity } = useCart();
 
   // Récupérer les médicaments
   const { data: medicaments, isLoading } = useQuery({
@@ -40,8 +46,7 @@ const MedicamentsPage: React.FC = () => {
   const updateFilters = (newFilters: Partial<typeof filters>) => {
     const updated = { ...filters, ...newFilters };
     setFilters(updated);
-    
-    // Mettre à jour l'URL
+
     const params = new URLSearchParams();
     if (updated.search) params.set('search', updated.search);
     if (updated.category) params.set('category', updated.category);
@@ -53,9 +58,9 @@ const MedicamentsPage: React.FC = () => {
 
   // Trier les médicaments
   const sortedMedicaments = React.useMemo(() => {
-    if (!medicaments) return [];
-    
-    const sorted = [...(medicaments?.data || [])];
+    if (!medicaments?.data) return [];
+
+    const sorted = [...medicaments.data];
     switch (filters.sortBy) {
       case 'price_asc':
         return sorted.sort((a, b) => a.price - b.price);
@@ -66,7 +71,7 @@ const MedicamentsPage: React.FC = () => {
       case 'name_desc':
         return sorted.sort((a, b) => b.name.localeCompare(a.name));
       default:
-        return sorted; // Par défaut, les plus populaires
+        return sorted;
     }
   }, [medicaments, filters.sortBy]);
 
@@ -81,13 +86,19 @@ const MedicamentsPage: React.FC = () => {
     return true;
   });
 
+  // Dans la fonction handleAddToCart de MedicamentsPage.tsx
   const handleAddToCart = (medicament: Medicament) => {
-    // TODO: Implémenter l'ajout au panier
-    console.log('Ajouter au panier:', medicament);
+    if (!canAddToCart(medicament, 1)) {
+      toast.error('Stock insuffisant ou déjà au maximum dans le panier');
+      return;
+    }
+
+    addItemToCart(medicament, 1);
+    toast.success(`${medicament.name} ajouté au panier`);
   };
 
   const handleAddToWishlist = (medicament: Medicament) => {
-    // TODO: Implémenter l'ajout à la liste de souhaits
+    toast('Fonctionnalité à venir');
     console.log('Ajouter à la liste de souhaits:', medicament);
   };
 
@@ -124,7 +135,7 @@ const MedicamentsPage: React.FC = () => {
               />
             </div>
           </div>
-          
+
           <div>
             <select
               className="w-full px-3 py-3 border border-gray-300 rounded-lg"
@@ -139,7 +150,7 @@ const MedicamentsPage: React.FC = () => {
               ))}
             </select>
           </div>
-          
+
           <div>
             <select
               className="w-full px-3 py-3 border border-gray-300 rounded-lg"
@@ -169,7 +180,7 @@ const MedicamentsPage: React.FC = () => {
               onChange={(e) => updateFilters({ minPrice: e.target.value })}
             />
           </div>
-          
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Prix maximum (FCFA)
@@ -182,26 +193,24 @@ const MedicamentsPage: React.FC = () => {
               onChange={(e) => updateFilters({ maxPrice: e.target.value })}
             />
           </div>
-          
+
           <div className="flex items-end space-x-4">
             <div className="flex space-x-2">
               <button
                 onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg ${
-                  viewMode === 'grid' 
-                    ? 'bg-blue-600 text-white' 
+                className={`p-2 rounded-lg ${viewMode === 'grid'
+                    ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                  }`}
               >
                 <Grid className="h-5 w-5" />
               </button>
               <button
                 onClick={() => setViewMode('list')}
-                className={`p-2 rounded-lg ${
-                  viewMode === 'list' 
-                    ? 'bg-blue-600 text-white' 
+                className={`p-2 rounded-lg ${viewMode === 'list'
+                    ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                  }`}
               >
                 <List className="h-5 w-5" />
               </button>
@@ -218,7 +227,7 @@ const MedicamentsPage: React.FC = () => {
           </h2>
           <div className="text-sm text-gray-500">
             {filters.search && `Recherche: "${filters.search}"`}
-            {filters.category && categories?.find(c => c.id === parseInt(filters.category))?.name && 
+            {filters.category && categories?.find(c => c.id === parseInt(filters.category))?.name &&
               ` • Catégorie: ${categories.find(c => c.id === parseInt(filters.category))?.name}`
             }
           </div>
@@ -227,176 +236,200 @@ const MedicamentsPage: React.FC = () => {
         {/* Liste des médicaments */}
         {viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {filteredMedicaments.map((medicament) => (
-              <div key={medicament.id} className="bg-white rounded-xl shadow hover:shadow-lg transition-shadow">
-                <div className="relative">
-                  {medicament.image ? (
-                    <img
-                      src={medicament.image}
-                      alt={medicament.name}
-                      className="w-full h-48 object-cover rounded-t-xl"
-                    />
-                  ) : (
-                    <div className="w-full h-48 bg-blue-100 rounded-t-xl flex items-center justify-center">
-                      <Package className="h-20 w-20 text-blue-600" />
-                    </div>
-                  )}
-                  
-                  {medicament.requires_prescription && (
-                    <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 rounded-full text-xs font-bold">
-                      Ordonnance
-                    </div>
-                  )}
-                  
-                  <button
-                    onClick={() => handleAddToWishlist(medicament)}
-                    className="absolute top-2 left-2 p-2 bg-white rounded-full hover:bg-gray-100"
-                  >
-                    <Heart className="h-5 w-5 text-gray-600" />
-                  </button>
-                </div>
-                
-                <div className="p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <h3 className="font-bold text-lg truncate">{medicament.name}</h3>
-                    <span className="text-sm text-gray-500">{medicament.form}</span>
-                  </div>
-                  
-                  <p className="text-gray-600 text-sm mb-3 line-clamp-2">
-                    {medicament.description || 'Pas de description'}
-                  </p>
-                  
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center">
-                      <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                      <span className="text-sm">4.5</span>
-                    </div>
-                    <span className="text-sm text-gray-500">
-                      {medicament.pharmacy?.name}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-xl font-bold text-green-600">
-                      {medicament.price.toLocaleString()} FCFA
-                    </span>
-                    <span className={`text-sm px-2 py-1 rounded-full ${
-                      medicament.quantity > 10 ? 'bg-green-100 text-green-800' :
-                      medicament.quantity > 0 ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {medicament.quantity > 0 ? `Stock: ${medicament.quantity}` : 'Rupture'}
-                    </span>
-                  </div>
-                  
-                  <div className="mt-4 flex space-x-2">
-                    <button
-                      onClick={() => handleAddToCart(medicament)}
-                      disabled={medicament.quantity === 0}
-                      className={`flex-1 py-2 rounded-lg font-medium flex items-center justify-center ${
-                        medicament.quantity === 0
-                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                    >
-                      <ShoppingCart className="h-4 w-4 mr-2" />
-                      Ajouter
-                    </button>
-                    <button className="p-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50">
-                      <Eye className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredMedicaments.map((medicament) => (
-              <div key={medicament.id} className="bg-white rounded-xl shadow p-6">
-                <div className="flex">
-                  <div className="w-32 h-32 mr-6">
+            {filteredMedicaments.map((medicament) => {
+              const currentQuantity = getItemQuantity(medicament.id);
+              const canAddMore = canAddToCart(medicament, 1);
+
+              return (
+                <div key={medicament.id} className="bg-white rounded-xl shadow hover:shadow-lg transition-shadow">
+                  <div className="relative">
                     {medicament.image ? (
                       <img
                         src={medicament.image}
                         alt={medicament.name}
-                        className="w-full h-full object-cover rounded-lg"
+                        className="w-full h-48 object-cover rounded-t-xl"
                       />
                     ) : (
-                      <div className="w-full h-full bg-blue-100 rounded-lg flex items-center justify-center">
-                        <Package className="h-16 w-16 text-blue-600" />
+                      <div className="w-full h-48 bg-blue-100 rounded-t-xl flex items-center justify-center">
+                        <Package className="h-20 w-20 text-blue-600" />
                       </div>
                     )}
+
+                    {medicament.requires_prescription && (
+                      <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 rounded-full text-xs font-bold">
+                        Ordonnance
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => handleAddToWishlist(medicament)}
+                      className="absolute top-2 left-2 p-2 bg-white rounded-full hover:bg-gray-100"
+                    >
+                      <Heart className="h-5 w-5 text-gray-600" />
+                    </button>
                   </div>
-                  
-                  <div className="flex-1">
+
+                  <div className="p-4">
                     <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h3 className="text-xl font-bold">{medicament.name}</h3>
-                        <p className="text-gray-600">{medicament.pharmacy?.name}</p>
-                      </div>
-                      <span className="text-2xl font-bold text-green-600">
-                        {medicament.price.toLocaleString()} FCFA
-                      </span>
+                      <h3 className="font-bold text-lg truncate">{medicament.name}</h3>
+                      <span className="text-sm text-gray-500">{medicament.form}</span>
                     </div>
-                    
-                    <p className="text-gray-700 mb-4">{medicament.description}</p>
-                    
-                    <div className="flex items-center space-x-6 mb-4">
-                      <div className="flex items-center">
-                        <Package className="h-4 w-4 text-gray-400 mr-2" />
-                        <span className="text-sm">{medicament.form} • {medicament.dosage}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <TrendingUp className="h-4 w-4 text-gray-400 mr-2" />
-                        <span className={`text-sm ${
-                          medicament.quantity > 10 ? 'text-green-600' :
-                          medicament.quantity > 0 ? 'text-yellow-600' : 'text-red-600'
-                        }`}>
-                          {medicament.quantity > 0 ? `${medicament.quantity} en stock` : 'Rupture de stock'}
-                        </span>
-                      </div>
-                      {medicament.requires_prescription && (
-                        <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
-                          Ordonnance requise
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="flex justify-between items-center">
+
+                    <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                      {medicament.description || 'Pas de description'}
+                    </p>
+
+                    <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center">
                         <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                        <span>4.5 (124 avis)</span>
+                        <span className="text-sm">4.5</span>
                       </div>
-                      
-                      <div className="flex space-x-3">
-                        <button
-                          onClick={() => handleAddToWishlist(medicament)}
-                          className="p-2 text-gray-600 hover:text-red-600"
-                        >
-                          <Heart className="h-5 w-5" />
-                        </button>
-                        <button
-                          onClick={() => handleAddToCart(medicament)}
-                          disabled={medicament.quantity === 0}
-                          className={`px-6 py-2 rounded-lg font-medium ${
-                            medicament.quantity === 0
-                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                      <span className="text-sm text-gray-500">
+                        {medicament.pharmacy?.name}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-xl font-bold text-green-600">
+                        {medicament.price.toLocaleString()} FCFA
+                      </span>
+                      <span className={`text-sm px-2 py-1 rounded-full ${medicament.quantity > 10 ? 'bg-green-100 text-green-800' :
+                          medicament.quantity > 0 ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                        }`}>
+                        {medicament.quantity > 0 ? `Stock: ${medicament.quantity}` : 'Rupture'}
+                      </span>
+                    </div>
+
+                    {/* Quantité dans le panier */}
+                    {currentQuantity > 0 && (
+                      <div className="mt-2 text-sm text-blue-600 font-medium">
+                        {currentQuantity} dans le panier
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex space-x-2">
+                      <button
+                        onClick={() => handleAddToCart(medicament)}
+                        disabled={!canAddMore || medicament.quantity === 0}
+                        className={`flex-1 py-2 rounded-lg font-medium flex items-center justify-center ${!canAddMore || medicament.quantity === 0
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
                           }`}
-                        >
-                          <ShoppingCart className="inline h-4 w-4 mr-2" />
-                          Ajouter au panier
-                        </button>
-                        <button className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50">
-                          Voir détails
-                        </button>
+                      >
+                        <ShoppingCart className="h-4 w-4 mr-2" />
+                        {medicament.quantity === 0 ? 'Rupture' : canAddMore ? 'Ajouter' : 'Max atteint'}
+                      </button>
+                      <button
+                        onClick={() => window.location.href = `/medicaments/${medicament.id}`}
+                        className="p-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50"
+                      >
+                        <Eye className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredMedicaments.map((medicament) => {
+              const currentQuantity = getItemQuantity(medicament.id);
+              const canAddMore = canAddToCart(medicament, 1);
+
+              return (
+                <div key={medicament.id} className="bg-white rounded-xl shadow p-6">
+                  <div className="flex">
+                    <div className="w-32 h-32 mr-6">
+                      {medicament.image ? (
+                        <img
+                          src={medicament.image}
+                          alt={medicament.name}
+                          className="w-full h-full object-cover rounded-lg"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-blue-100 rounded-lg flex items-center justify-center">
+                          <Package className="h-16 w-16 text-blue-600" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <h3 className="text-xl font-bold">{medicament.name}</h3>
+                          <p className="text-gray-600">{medicament.pharmacy?.name}</p>
+                        </div>
+                        <span className="text-2xl font-bold text-green-600">
+                          {medicament.price.toLocaleString()} FCFA
+                        </span>
+                      </div>
+
+                      <p className="text-gray-700 mb-4">{medicament.description}</p>
+
+                      <div className="flex items-center space-x-6 mb-4">
+                        <div className="flex items-center">
+                          <Package className="h-4 w-4 text-gray-400 mr-2" />
+                          <span className="text-sm">{medicament.form} • {medicament.dosage}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <TrendingUp className="h-4 w-4 text-gray-400 mr-2" />
+                          <span className={`text-sm ${medicament.quantity > 10 ? 'text-green-600' :
+                              medicament.quantity > 0 ? 'text-yellow-600' : 'text-red-600'
+                            }`}>
+                            {medicament.quantity > 0 ? `${medicament.quantity} en stock` : 'Rupture de stock'}
+                          </span>
+                        </div>
+                        {medicament.requires_prescription && (
+                          <span className="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">
+                            Ordonnance requise
+                          </span>
+                        )}
+                        {currentQuantity > 0 && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                            {currentQuantity} dans le panier
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center">
+                          <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                          <span>4.5 (124 avis)</span>
+                        </div>
+
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={() => handleAddToWishlist(medicament)}
+                            className="p-2 text-gray-600 hover:text-red-600"
+                          >
+                            <Heart className="h-5 w-5" />
+                          </button>
+                          <button
+                            onClick={() => handleAddToCart(medicament)}
+                            disabled={!canAddMore || medicament.quantity === 0}
+                            className={`px-6 py-2 rounded-lg font-medium ${!canAddMore || medicament.quantity === 0
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-blue-600 text-white hover:bg-blue-700'
+                              }`}
+                          >
+                            <ShoppingCart className="inline h-4 w-4 mr-2" />
+                            {medicament.quantity === 0 ? 'Rupture' : canAddMore ? 'Ajouter au panier' : 'Max atteint'}
+                          </button>
+                          <button
+                            onClick={() => window.location.href = `/medicaments/${medicament.id}`}
+                            className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50"
+                          >
+                            Voir détails
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
