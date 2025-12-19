@@ -1,5 +1,5 @@
 // src/components/pharmacies/PharmacyForm.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,7 +13,8 @@ import {
   Image as ImageIcon,
   Upload,
   AlertCircle,
-  Navigation
+  Navigation,
+  X
 } from 'lucide-react';
 
 const pharmacySchema = z.object({
@@ -38,7 +39,7 @@ interface PharmacyFormProps {
   onSubmit: (data: FormData) => Promise<void>;
   isLoading: boolean;
   error?: string;
-  initialData?: Partial<PharmacyFormData>;
+  initialData?: any;
   isEdit?: boolean;
 }
 
@@ -50,7 +51,9 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
   isEdit = false,
 }) => {
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
   const [useCurrentLocation, setUseCurrentLocation] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     register,
@@ -70,39 +73,120 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
     },
   });
 
-  const logoFile = watch('logo');
-
-  // Gérer la prévisualisation du logo
-  useEffect(() => {
-    if (logoFile && logoFile.length > 0) {
-      const file = logoFile[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setLogoPreview(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-      }
+  // Fonction pour formater l'URL du logo
+  const formatLogoUrl = (logoUrl: any): string | null => {
+    if (!logoUrl) return null;
+    
+    let url = logoUrl;
+    
+    // Si c'est un objet Laravel
+    if (typeof logoUrl === 'object' && logoUrl.url) {
+      url = logoUrl.url;
+    } else if (typeof logoUrl === 'object' && logoUrl.path) {
+      url = logoUrl.path;
     }
-  }, [logoFile]);
+    
+    // Si c'est une chaîne
+    if (typeof url === 'string') {
+      // Si c'est déjà une URL complète ou une URL blob
+      if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('blob:')) {
+        return url;
+      }
+      
+      // Si c'est un chemin absolu
+      if (url.startsWith('/')) {
+        const baseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:8000';
+        return `${baseUrl}${url}`;
+      }
+      
+      // Sinon, supposer que c'est un chemin de stockage Laravel
+      const baseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:8000';
+      const cleanPath = url.replace(/^storage\//, '');
+      return `${baseUrl}/storage/${cleanPath}`;
+    }
+    
+    return null;
+  };
 
-  // Réinitialiser le formulaire avec les données initiales
+  // Gérer le chargement initial des données
   useEffect(() => {
     if (initialData) {
-      reset(initialData);
-      if (initialData.logo && typeof initialData.logo === 'string') {
-        setLogoPreview(initialData.logo);
+      console.log('Initial data for pharmacy form:', initialData);
+      
+      reset({
+        name: initialData.name || '',
+        description: initialData.description || '',
+        address: initialData.address || '',
+        latitude: initialData.latitude || 0,
+        longitude: initialData.longitude || 0,
+        phone: initialData.phone || '',
+        email: initialData.email || '',
+        is_garde: initialData.is_garde || false,
+        opening_time: initialData.opening_time || '08:00',
+        closing_time: initialData.closing_time || '20:00',
+        is_active: initialData.is_active !== undefined ? initialData.is_active : true,
+      });
+
+      // Gérer le logo existant
+      if (initialData.logo) {
+        const formattedUrl = formatLogoUrl(initialData.logo);
+        if (formattedUrl) {
+          console.log('Setting logo preview:', formattedUrl);
+          setLogoPreview(formattedUrl);
+        }
       }
     }
   }, [initialData, reset]);
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Vérifier la taille (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Le fichier est trop volumineux (max 5MB)');
+        return;
+      }
+      
+      // Vérifier le type
+      if (!file.type.startsWith('image/')) {
+        alert('Veuillez sélectionner une image valide');
+        return;
+      }
+      
+      setLogoFile(file);
+      
+      // Créer une URL de prévisualisation
+      const previewUrl = URL.createObjectURL(file);
+      setLogoPreview(previewUrl);
+    }
+  };
+
+  const removeLogo = () => {
+    // Nettoyer l'URL blob si elle existe
+    if (logoPreview && logoPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(logoPreview);
+    }
+    
+    setLogoPreview(null);
+    setLogoFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    
+    // Si en mode édition, on peut vouloir supprimer le logo existant
+    if (isEdit) {
+      console.log('Logo removed in edit mode');
+    }
+  };
 
   const handleUseCurrentLocation = () => {
     if (navigator.geolocation) {
       setUseCurrentLocation(true);
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setValue('latitude', position.coords.latitude);
-          setValue('longitude', position.coords.longitude);
+          setValue('latitude', position.coords.latitude, { shouldValidate: true });
+          setValue('longitude', position.coords.longitude, { shouldValidate: true });
+          setUseCurrentLocation(false);
         },
         (error) => {
           console.error('Erreur de géolocalisation:', error);
@@ -116,28 +200,56 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
   };
 
   const handleFormSubmit = async (data: PharmacyFormData) => {
-    const formData = new FormData();
+    try {
+      const formData = new FormData();
 
-    // Ajouter les champs textuels
-    formData.append('name', data.name);
-    if (data.description) formData.append('description', data.description);
-    formData.append('address', data.address);
-    formData.append('latitude', data.latitude.toString());
-    formData.append('longitude', data.longitude.toString());
-    formData.append('phone', data.phone);
-    if (data.email) formData.append('email', data.email);
-    formData.append('is_garde', data.is_garde ? 'true' : 'false');
-    formData.append('opening_time', data.opening_time);
-    formData.append('closing_time', data.closing_time);
-    formData.append('is_active', data.is_active.toString());
+      // Ajouter les champs textuels
+      formData.append('name', data.name);
+      if (data.description) formData.append('description', data.description);
+      formData.append('address', data.address);
+      formData.append('latitude', data.latitude.toString());
+      formData.append('longitude', data.longitude.toString());
+      formData.append('phone', data.phone);
+      if (data.email) formData.append('email', data.email);
+      formData.append('is_garde', data.is_garde ? '1' : '0');
+      formData.append('opening_time', data.opening_time);
+      formData.append('closing_time', data.closing_time);
+      formData.append('is_active', data.is_active ? '1' : '0');
 
-    // Ajouter le logo si fourni
-    if (data.logo && data.logo.length > 0) {
-      formData.append('logo', data.logo[0]);
+      // Pour la modification, ajouter _method=PUT
+      if (isEdit) {
+        formData.append('_method', 'PUT');
+      }
+
+      // Ajouter le logo si un nouveau fichier est sélectionné
+      if (logoFile) {
+        formData.append('logo', logoFile);
+      } else if (isEdit && !logoPreview) {
+        // Si on édite et qu'il n'y a pas de logo preview,
+        // cela signifie qu'on a supprimé le logo existant
+        formData.append('remove_logo', 'true');
+      }
+
+      console.log('Submitting pharmacy form with data:', {
+        name: data.name,
+        hasLogo: !!logoFile,
+        isEdit
+      });
+
+      await onSubmit(formData);
+    } catch (error) {
+      console.error('Error in form submission:', error);
     }
-
-    await onSubmit(formData);
   };
+
+  // Nettoyer les URLs blob à la destruction
+  useEffect(() => {
+    return () => {
+      if (logoPreview && logoPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(logoPreview);
+      }
+    };
+  }, [logoPreview]);
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-8">
@@ -165,7 +277,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
             <input
               {...register('name')}
               type="text"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Ex: Pharmacie du Centre"
             />
             {errors.name && (
@@ -182,7 +294,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
               <input
                 {...register('phone')}
                 type="tel"
-                className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg"
+                className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="+228 XX XX XX XX"
               />
             </div>
@@ -200,7 +312,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
               <input
                 {...register('email')}
                 type="email"
-                className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg"
+                className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="pharmacie@email.com"
               />
             </div>
@@ -218,7 +330,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
               <textarea
                 {...register('description')}
                 rows={3}
-                className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg"
+                className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Description de votre pharmacie, spécialités, services..."
               />
             </div>
@@ -243,7 +355,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
               <textarea
                 {...register('address')}
                 rows={2}
-                className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg"
+                className="pl-10 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Rue, Quartier, Ville"
               />
             </div>
@@ -261,7 +373,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
                 {...register('latitude', { valueAsNumber: true })}
                 type="number"
                 step="any"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Ex: 6.1725"
               />
               {errors.latitude && (
@@ -277,7 +389,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
                 {...register('longitude', { valueAsNumber: true })}
                 type="number"
                 step="any"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Ex: 1.2314"
               />
               {errors.longitude && (
@@ -289,11 +401,20 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
               <button
                 type="button"
                 onClick={handleUseCurrentLocation}
-                disabled={useCurrentLocation}
+                disabled={useCurrentLocation || isLoading}
                 className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center"
               >
-                <Navigation className="h-4 w-4 mr-2" />
-                {useCurrentLocation ? 'Position obtenue' : 'Utiliser ma position'}
+                {useCurrentLocation ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Chargement...
+                  </>
+                ) : (
+                  <>
+                    <Navigation className="h-4 w-4 mr-2" />
+                    Utiliser ma position
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -321,7 +442,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
             <input
               {...register('opening_time')}
               type="time"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
             {errors.opening_time && (
               <p className="mt-1 text-sm text-red-600">{errors.opening_time.message}</p>
@@ -335,7 +456,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
             <input
               {...register('closing_time')}
               type="time"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
             {errors.closing_time && (
               <p className="mt-1 text-sm text-red-600">{errors.closing_time.message}</p>
@@ -353,19 +474,34 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
 
         <div className="flex flex-col md:flex-row items-start md:items-center space-y-6 md:space-y-0 md:space-x-6">
           {/* Prévisualisation */}
-          <div className="flex-shrink-0">
+          <div className="flex-shrink-0 relative">
             <div className="h-48 w-48 rounded-lg border-2 border-dashed border-gray-300 overflow-hidden bg-gray-50">
               {logoPreview ? (
-                <img
-                  src={logoPreview}
-                  alt="Logo prévisualisation"
-                  className="h-full w-full object-cover"
-                />
+                <>
+                  <img
+                    src={logoPreview}
+                    alt="Logo prévisualisation"
+                    className="h-full w-full object-cover"
+                    onLoad={() => console.log('Logo loaded successfully')}
+                    onError={(e) => {
+                      console.error('Error loading logo:', logoPreview);
+                      (e.target as HTMLImageElement).src = '/placeholder-pharmacy.png';
+                    }}
+                    key={logoPreview}
+                  />
+                  <button
+                    type="button"
+                    onClick={removeLogo}
+                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </>
               ) : (
                 <div className="h-full w-full flex flex-col items-center justify-center p-4">
                   <Building className="h-12 w-12 text-gray-400 mb-2" />
                   <p className="text-sm text-gray-500 text-center">
-                    Aucun logo sélectionné
+                    {isEdit ? 'Aucun logo' : 'Aucun logo sélectionné'}
                   </p>
                 </div>
               )}
@@ -375,7 +511,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
           {/* Upload */}
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Télécharger un logo
+              {isEdit ? 'Changer le logo' : 'Télécharger un logo'}
             </label>
             <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-blue-500 transition-colors">
               <div className="space-y-1 text-center">
@@ -384,17 +520,24 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
                   <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
                     <span>Télécharger un fichier</span>
                     <input
-                      {...register('logo')}
+                      ref={fileInputRef}
                       type="file"
                       accept="image/*"
                       className="sr-only"
+                      onChange={handleLogoChange}
+                      disabled={isLoading}
                     />
                   </label>
                   <p className="pl-1">ou glisser-déposer</p>
                 </div>
                 <p className="text-xs text-gray-500">
-                  PNG, JPG, GIF jusqu'à 10MB
+                  PNG, JPG, GIF jusqu'à 5MB
                 </p>
+                {isEdit && !logoFile && (
+                  <p className="text-xs text-blue-500">
+                    Laisser vide pour conserver le logo actuel
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -417,6 +560,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
                 const value = e.target.checked;
                 setValue('is_garde', value, { shouldValidate: true });
               }}
+              disabled={isLoading}
             />
             <label htmlFor="is_garde" className="ml-2 block text-sm text-gray-700">
               Pharmacie de garde (ouverte 24h/24)
@@ -429,6 +573,7 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
               type="checkbox"
               id="is_active"
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              disabled={isLoading}
             />
             <label htmlFor="is_active" className="ml-2 block text-sm text-gray-700">
               Pharmacie active (visible pour les clients)
@@ -441,18 +586,25 @@ const PharmacyForm: React.FC<PharmacyFormProps> = ({
       <div className="flex justify-end space-x-4">
         <button
           type="button"
-          onClick={() => window.history.back()}
+          onClick={() => {
+            // Nettoyer les URLs blob avant de fermer
+            if (logoPreview && logoPreview.startsWith('blob:')) {
+              URL.revokeObjectURL(logoPreview);
+            }
+            window.history.back();
+          }}
           className="px-6 py-3 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50"
+          disabled={isLoading}
         >
           Annuler
         </button>
         <button
           type="submit"
           disabled={isLoading}
-          className="px-8 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-8 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed min-w-[150px]"
         >
           {isLoading ? (
-            <span className="flex items-center">
+            <span className="flex items-center justify-center">
               <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />

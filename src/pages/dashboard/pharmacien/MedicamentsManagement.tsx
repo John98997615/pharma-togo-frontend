@@ -1,7 +1,7 @@
 // src/pages/dashboard/pharmacien/MedicamentsManagement.tsx
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom'; // AJOUTÉ
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
   Search, Filter, Plus, Package, AlertTriangle,
@@ -10,30 +10,34 @@ import {
 import { medicamentService } from '../../../services/api/medicament.service';
 import { useAuth } from '../../../context/AuthContext';
 import { Medicament } from '../../../types/medicament.types';
-
-// AJOUTER : Composant Modal pour la création de médicament
-import MedicamentForm from '../../../components/medicaments/MedicamentForm'; // À créer si non existant
+import MedicamentForm from '../../../components/medicaments/MedicamentForm';
 
 const MedicamentsManagement: React.FC = () => {
   const { user } = useAuth();
-  const navigate = useNavigate(); // AJOUTÉ
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({
     search: '',
     category: 'all',
     availability: 'all'
   });
-  const [showAddModal, setShowAddModal] = useState(false); // CHANGÉ de showForm à showAddModal
+  const [showModal, setShowModal] = useState(false);
   const [editingMedicament, setEditingMedicament] = useState<Medicament | null>(null);
 
   // Récupérer les médicaments de la pharmacie
-  const { data: medicamentsData, isLoading } = useQuery({
+  const { data: medicamentsData, isLoading, refetch } = useQuery({
     queryKey: ['pharmacy-medicaments-management', user?.pharmacy?.id],
-    queryFn: () => medicamentService.getAll({ pharmacy_id: user?.pharmacy?.id }),
+    queryFn: async () => {
+      if (!user?.pharmacy?.id) return { data: [] };
+      const response = await medicamentService.getAll({
+        pharmacy_id: user.pharmacy.id
+      });
+      return response;
+    },
     enabled: !!user?.pharmacy,
   });
 
-  // Récupérer le tableau des médicaments depuis data.data
+  // S'assurer que medicaments est toujours un tableau
   const medicaments = medicamentsData?.data || [];
 
   // Mutation pour supprimer un médicament
@@ -61,23 +65,63 @@ const MedicamentsManagement: React.FC = () => {
     }
   });
 
-  // AJOUTÉ : Mutation pour créer/mettre à jour un médicament
+  // Mutation pour créer/mettre à jour un médicament
   const saveMedicamentMutation = useMutation({
     mutationFn: async (formData: FormData) => {
+      console.log('Saving medicament, isEditing:', !!editingMedicament);
+
+      // Corrigé : Méthode compatible pour itérer sur FormData
+      console.log('FormData entries:');
+      const entries = Array.from(formData.entries());
+      for (const [key, value] of entries) {
+        console.log(key, ':', value);
+      }
+
       if (editingMedicament) {
-        return medicamentService.update(editingMedicament.id, formData);
+        // Ajouter _method=PUT pour Laravel
+        formData.append('_method', 'PUT');
+        console.log('Calling update for medicament ID:', editingMedicament.id);
+        const result = await medicamentService.update(editingMedicament.id, formData);
+        console.log('Update result:', result);
+        return result;
       } else {
-        return medicamentService.create(formData);
+        console.log('Creating new medicament');
+        const result = await medicamentService.create(formData);
+        console.log('Create result:', result);
+        return result;
       }
     },
-    onSuccess: () => {
-      toast.success(editingMedicament ? 'Médicament mis à jour' : 'Médicament créé');
+    onSuccess: (data, variables, context) => {
+      console.log('Mutation success:', data);
+      toast.success(editingMedicament ? 'Médicament mis à jour avec succès' : 'Médicament créé avec succès');
       queryClient.invalidateQueries({ queryKey: ['pharmacy-medicaments-management'] });
-      setShowAddModal(false);
+      setShowModal(false);
       setEditingMedicament(null);
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Erreur lors de l\'enregistrement');
+      console.error('Mutation error details:', error);
+      console.error('Error response:', error.response);
+
+      let errorMessage = 'Erreur lors de l\'enregistrement';
+
+      if (error.response) {
+        // Erreur de validation Laravel
+        if (error.response.data && error.response.data.errors) {
+          const validationErrors = error.response.data.errors;
+          errorMessage = Object.values(validationErrors)
+            .flat()
+            .join(', ');
+        } else if (error.response.data && error.response.data.message) {
+          errorMessage = error.response.data.message;
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      toast.error(errorMessage);
+    },
+    onSettled: () => {
+      console.log('Mutation settled');
     }
   });
 
@@ -91,28 +135,43 @@ const MedicamentsManagement: React.FC = () => {
     adjustStockMutation.mutate({ id, adjustment });
   };
 
-  // AJOUTÉ : Fonctions pour les boutons
   const handleViewDetails = (medicament: Medicament) => {
-    // Naviguer vers une page de détails ou ouvrir un modal
-    toast(`Détails de ${medicament.name} - ID: ${medicament.id}`, {
-      icon: 'ℹ️',
-      duration: 3000,
-    });
-    navigate(`/pharmacien/medicaments/${medicament.id}`); // Si route existante
+    navigate(`/pharmacien/medicaments/${medicament.id}`);
   };
 
   const handleEdit = (medicament: Medicament) => {
+    console.log('Editing medicament:', medicament);
     setEditingMedicament(medicament);
-    setShowAddModal(true);
+    setShowModal(true);
   };
 
   const handleAddMedicament = () => {
     setEditingMedicament(null);
-    setShowAddModal(true);
+    setShowModal(true);
   };
 
   const handleSaveMedicament = async (formData: FormData) => {
-    await saveMedicamentMutation.mutateAsync(formData);
+    try {
+      await saveMedicamentMutation.mutateAsync(formData);
+    } catch (error) {
+      console.error('Error saving medicament:', error);
+    }
+  };
+
+  // Préparer les données initiales pour l'édition
+  const getInitialData = (medicament: Medicament) => {
+    return {
+      name: medicament.name || '',
+      description: medicament.description || '',
+      price: medicament.price || 0,
+      quantity: medicament.quantity || 0,
+      category_id: medicament.category_id || medicament.category?.id || 0,
+      form: medicament.form || '',
+      dosage: medicament.dosage || '',
+      requires_prescription: medicament.requires_prescription || false,
+      is_active: medicament.is_active !== undefined ? medicament.is_active : true,
+      image: medicament.image || null
+    };
   };
 
   // Filtrer les médicaments
@@ -161,7 +220,6 @@ const MedicamentsManagement: React.FC = () => {
             <h1 className="text-2xl font-bold text-gray-900">Gestion des Médicaments</h1>
             <p className="text-gray-600">Gérez le stock de votre pharmacie {user.pharmacy.name}</p>
           </div>
-          {/* CORRECTION : Changer pour appeler handleAddMedicament */}
           <button
             onClick={handleAddMedicament}
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center"
@@ -223,7 +281,7 @@ const MedicamentsManagement: React.FC = () => {
                 <input
                   type="text"
                   placeholder="Rechercher un médicament..."
-                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   value={filters.search}
                   onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                 />
@@ -232,7 +290,7 @@ const MedicamentsManagement: React.FC = () => {
 
             <div>
               <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 value={filters.availability}
                 onChange={(e) => setFilters({ ...filters, availability: e.target.value })}
               >
@@ -245,12 +303,12 @@ const MedicamentsManagement: React.FC = () => {
 
             <div>
               <select
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 value={filters.category}
                 onChange={(e) => setFilters({ ...filters, category: e.target.value })}
               >
                 <option value="all">Toutes catégories</option>
-                {/* Ajouter les catégories ici */}
+                {/* Ajouter les catégories ici si nécessaire */}
               </select>
             </div>
           </div>
@@ -258,125 +316,10 @@ const MedicamentsManagement: React.FC = () => {
 
         {/* Liste des médicaments */}
         <div className="bg-white rounded-xl shadow overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Médicament</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Catégorie</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Prix</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredMedicaments.map((medicament: Medicament) => (
-                  <tr key={medicament.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center">
-                        {medicament.image ? (
-                          <img
-                            src={medicament.image}
-                            alt={medicament.name}
-                            className="h-10 w-10 rounded object-cover mr-4"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded bg-blue-100 flex items-center justify-center mr-4">
-                            <Package className="h-6 w-6 text-blue-600" />
-                          </div>
-                        )}
-                        <div>
-                          <h4 className="font-medium">{medicament.name}</h4>
-                          <p className="text-sm text-gray-500 truncate max-w-xs">
-                            {medicament.description || 'Pas de description'}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">
-                        {medicament.category?.name || 'Non catégorisé'}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-3">
-                        <span className={`font-bold ${medicament.quantity === 0 ? 'text-red-600' :
-                          medicament.quantity < 10 ? 'text-yellow-600' : 'text-green-600'
-                          }`}>
-                          {medicament.quantity}
-                        </span>
-
-                        <div className="flex space-x-1">
-                          <button
-                            onClick={() => handleAdjustStock(medicament.id, 1)}
-                            className="w-6 h-6 flex items-center justify-center bg-green-100 text-green-600 rounded hover:bg-green-200"
-                          >
-                            +
-                          </button>
-                          <button
-                            onClick={() => handleAdjustStock(medicament.id, -1)}
-                            className="w-6 h-6 flex items-center justify-center bg-red-100 text-red-600 rounded hover:bg-red-200"
-                          >
-                            -
-                          </button>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span className="font-bold">{medicament.price.toLocaleString()} FCFA</span>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${medicament.quantity === 0 ? 'bg-red-100 text-red-800' :
-                        medicament.quantity < 10 ? 'bg-yellow-100 text-yellow-800' :
-                          medicament.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
-                        {medicament.quantity === 0 ? 'Rupture' :
-                          medicament.quantity < 10 ? 'Stock faible' :
-                            medicament.is_active ? 'Actif' : 'Inactif'}
-                      </span>
-                    </td>
-
-                    <td className="px-6 py-4">
-                      <div className="flex space-x-2">
-                        {/* CORRECTION : Ajouter onClick */}
-                        <button
-                          onClick={() => handleViewDetails(medicament)}
-                          className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg"
-                          title="Voir détails"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </button>
-                        {/* CORRECTION : Ajouter onClick */}
-                        <button
-                          onClick={() => handleEdit(medicament)}
-                          className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg"
-                          title="Modifier"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(medicament.id)}
-                          className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg"
-                          title="Supprimer"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
           {isLoading ? (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Chargement des médicaments...</p>
             </div>
           ) : filteredMedicaments.length === 0 ? (
             <div className="text-center py-12">
@@ -391,12 +334,145 @@ const MedicamentsManagement: React.FC = () => {
                 Ajouter un médicament
               </button>
             </div>
-          ) : null}
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Médicament</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Catégorie</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Prix</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {filteredMedicaments.map((medicament: Medicament) => (
+                      <tr key={medicament.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center">
+                            {medicament.image ? (
+                              <img
+                                src={medicament.image}
+                                alt={medicament.name}
+                                className="h-10 w-10 rounded object-cover mr-4"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = '/placeholder-medicament.png';
+                                }}
+                              />
+                            ) : (
+                              <div className="h-10 w-10 rounded bg-blue-100 flex items-center justify-center mr-4">
+                                <Package className="h-6 w-6 text-blue-600" />
+                              </div>
+                            )}
+                            <div>
+                              <h4 className="font-medium">{medicament.name}</h4>
+                              <p className="text-sm text-gray-500 truncate max-w-xs">
+                                {medicament.description || 'Pas de description'}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">
+                            {medicament.category?.name || 'Non catégorisé'}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <div className="flex items-center space-x-3">
+                            <span className={`font-bold ${medicament.quantity === 0 ? 'text-red-600' :
+                              medicament.quantity < 10 ? 'text-yellow-600' : 'text-green-600'
+                              }`}>
+                              {medicament.quantity}
+                            </span>
+
+                            <div className="flex space-x-1">
+                              <button
+                                onClick={() => handleAdjustStock(medicament.id, 1)}
+                                disabled={adjustStockMutation.isPending}
+                                className="w-6 h-6 flex items-center justify-center bg-green-100 text-green-600 rounded hover:bg-green-200 disabled:opacity-50"
+                                title="Augmenter le stock"
+                              >
+                                +
+                              </button>
+                              <button
+                                onClick={() => handleAdjustStock(medicament.id, -1)}
+                                disabled={adjustStockMutation.isPending || medicament.quantity <= 0}
+                                className="w-6 h-6 flex items-center justify-center bg-red-100 text-red-600 rounded hover:bg-red-200 disabled:opacity-50"
+                                title="Diminuer le stock"
+                              >
+                                -
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <span className="font-bold">{medicament.price.toLocaleString()} FCFA</span>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${medicament.quantity === 0 ? 'bg-red-100 text-red-800' :
+                            medicament.quantity < 10 ? 'bg-yellow-100 text-yellow-800' :
+                              medicament.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            }`}>
+                            {medicament.quantity === 0 ? 'Rupture' :
+                              medicament.quantity < 10 ? 'Stock faible' :
+                                medicament.is_active ? 'Actif' : 'Inactif'}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleViewDetails(medicament)}
+                              className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Voir détails"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleEdit(medicament)}
+                              className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
+                              title="Modifier"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(medicament.id)}
+                              disabled={deleteMutation.isPending}
+                              className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination si nécessaire */}
+              {medicaments.length > 0 && (
+                <div className="px-6 py-4 border-t border-gray-200">
+                  <p className="text-sm text-gray-500">
+                    Affichage de {filteredMedicaments.length} sur {medicaments.length} médicaments
+                  </p>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
       {/* Modal pour ajouter/modifier un médicament */}
-      {showAddModal && (
+      {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
@@ -406,33 +482,23 @@ const MedicamentsManagement: React.FC = () => {
                 </h2>
                 <button
                   onClick={() => {
-                    setShowAddModal(false);
+                    setShowModal(false);
                     setEditingMedicament(null);
                   }}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  disabled={saveMedicamentMutation.isPending}
                 >
                   ✕
                 </button>
               </div>
 
-              {/* Utiliser le composant MedicamentForm existant */}
               <MedicamentForm
                 onSubmit={handleSaveMedicament}
                 isLoading={saveMedicamentMutation.isPending}
                 error={saveMedicamentMutation.error?.message}
-                initialData={editingMedicament ? {
-                  name: editingMedicament.name,
-                  description: editingMedicament.description,
-                  price: editingMedicament.price,
-                  quantity: editingMedicament.quantity,
-                  category_id: editingMedicament.category_id,
-                  form: editingMedicament.form,
-                  dosage: editingMedicament.dosage,
-                  requires_prescription: editingMedicament.requires_prescription,
-                  is_active: editingMedicament.is_active,
-                  image: editingMedicament.image
-                } : undefined}
+                initialData={editingMedicament ? getInitialData(editingMedicament) : undefined}
                 pharmacyId={user?.pharmacy?.id}
+                isEditing={!!editingMedicament}
               />
             </div>
           </div>

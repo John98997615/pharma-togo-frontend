@@ -7,11 +7,46 @@ import {
   Mail, 
   Clock, 
   Star, 
-  Shield,
   AlertTriangle,
-  Navigation
+  Navigation,
+  Building
 } from 'lucide-react';
 import { Pharmacy } from '../../types/pharmacy.types';
+
+// Fonction pour formater l'URL du logo
+const formatLogoUrl = (logoUrl: any): string => {
+  if (!logoUrl) return '';
+  
+  let url = logoUrl;
+  
+  // Si c'est un objet Laravel
+  if (typeof logoUrl === 'object' && logoUrl.url) {
+    url = logoUrl.url;
+  } else if (typeof logoUrl === 'object' && logoUrl.path) {
+    url = logoUrl.path;
+  }
+  
+  // Si c'est une chaîne
+  if (typeof url === 'string') {
+    // Si c'est déjà une URL complète
+    if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('blob:')) {
+      return url;
+    }
+    
+    // Si c'est un chemin absolu
+    if (url.startsWith('/')) {
+      const baseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:8000';
+      return `${baseUrl}${url}`;
+    }
+    
+    // Sinon, supposer que c'est un chemin de stockage
+    const baseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:8000';
+    const cleanPath = url.replace(/^storage\//, '');
+    return `${baseUrl}/storage/${cleanPath}`;
+  }
+  
+  return '';
+};
 
 interface PharmacyCardProps {
   pharmacy: Pharmacy;
@@ -32,13 +67,6 @@ const PharmacyCard: React.FC<PharmacyCardProps> = ({
     return `${opening.slice(0, 5)} - ${closing.slice(0, 5)}`;
   };
 
-  const getDistanceColor = (distance?: number) => {
-    if (!distance) return 'text-gray-600';
-    if (distance < 1) return 'text-green-600';
-    if (distance < 5) return 'text-yellow-600';
-    return 'text-orange-600';
-  };
-
   const handleGetDirections = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition((position) => {
@@ -51,19 +79,32 @@ const PharmacyCard: React.FC<PharmacyCardProps> = ({
     }
   };
 
+  // Formater l'URL du logo
+  const logoUrl = formatLogoUrl(pharmacy.logo);
+
   return (
     <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
       {/* En-tête avec image */}
       <div className="h-48 relative">
-        {pharmacy.logo ? (
+        {logoUrl ? (
           <img
-            src={pharmacy.logo}
+            src={logoUrl}
             alt={pharmacy.name}
             className="h-full w-full object-cover"
+            onError={(e) => {
+              console.error('Error loading pharmacy logo:', logoUrl);
+              (e.target as HTMLImageElement).src = '/placeholder-pharmacy.png';
+              (e.target as HTMLImageElement).className = 'h-full w-full bg-gradient-to-r from-blue-500 to-blue-700 flex items-center justify-center';
+              (e.target as HTMLImageElement).innerHTML = `
+                <span class="text-white text-2xl font-bold">
+                  ${pharmacy.name.charAt(0)}
+                </span>
+              `;
+            }}
           />
         ) : (
           <div className="h-full w-full bg-gradient-to-r from-blue-500 to-blue-700 flex items-center justify-center">
-            <span className="text-white text-2xl font-bold">{pharmacy.name.charAt(0)}</span>
+            <Building className="h-16 w-16 text-white" />
           </div>
         )}
         
