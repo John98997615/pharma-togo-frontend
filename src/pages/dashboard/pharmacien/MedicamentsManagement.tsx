@@ -136,7 +136,7 @@ const MedicamentsManagement: React.FC = () => {
   };
 
   const handleViewDetails = (medicament: Medicament) => {
-    navigate(`/pharmacien/medicaments/${medicament.id}`);
+    navigate(`/medicaments/${medicament.id}`);
   };
 
   const handleEdit = (medicament: Medicament) => {

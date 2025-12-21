@@ -4,6 +4,8 @@ import { Search, Filter, MoreVertical, UserPlus, Download } from 'lucide-react';
 import { User, UserRole } from '../../../types/user.types';
 import { adminService } from '../../../services/api/admin.service';
 import { toast } from 'react-hot-toast';
+import { exportToCSV } from '../../../utils/exportUtils';
+import UserCreateModal from '../../../components/admin/UserCreateModal';
 
 const UsersManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -11,6 +13,7 @@ const UsersManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -68,6 +71,49 @@ const UsersManagement: React.FC = () => {
     }
   };
 
+  const handleExportUsers = () => {
+    try {
+      // Préparer les données pour l'export
+      const exportData = filteredUsers.map(user => ({
+        ID: user.id,
+        Nom: user.name,
+        Email: user.email,
+        Téléphone: user.phone,
+        Rôle: user.role,
+        Statut: user.is_active ? 'Actif' : 'Inactif',
+        Adresse: user.address || '',
+        'Date d\'inscription': new Date(user.created_at).toLocaleDateString('fr-FR'),
+        'Dernière mise à jour': new Date(user.updated_at).toLocaleDateString('fr-FR'),
+      }));
+
+      if (exportData.length === 0) {
+        toast.error('Aucune donnée à exporter');
+        return;
+      }
+
+      const success = exportToCSV(exportData, 'utilisateurs-pharmatogo');
+      
+      if (success) {
+        toast.success(`${exportData.length} utilisateurs exportés avec succès`);
+      } else {
+        toast.error('Erreur lors de l\'exportation');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Erreur lors de l\'exportation des données');
+    }
+  };
+
+  const handleAddUser = () => {
+    setIsCreateModalOpen(true);
+  };
+
+  const handleUserCreated = (newUser: User) => {
+    setUsers(prev => [newUser, ...prev]);
+    setIsCreateModalOpen(false);
+    toast.success('Utilisateur créé avec succès');
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -103,6 +149,15 @@ const UsersManagement: React.FC = () => {
 
   return (
     <div className="p-6">
+      {/* Modal de création d'utilisateur */}
+      {isCreateModalOpen && (
+        <UserCreateModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onUserCreated={handleUserCreated}
+        />
+      )}
+
       {/* En-tête */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Gestion des utilisateurs</h1>
@@ -152,19 +207,26 @@ const UsersManagement: React.FC = () => {
 
             <button className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center">
               <Filter className="h-4 w-4 mr-2" />
-              Filtres
+              Filtres avancés
             </button>
           </div>
 
           {/* Actions */}
           <div className="flex items-center space-x-3">
-            <button className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center">
+            <button 
+              onClick={handleExportUsers}
+              disabled={filteredUsers.length === 0}
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               <Download className="h-4 w-4 mr-2" />
-              Exporter
+              Exporter ({filteredUsers.length})
             </button>
-            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center">
+            <button 
+              onClick={handleAddUser}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+            >
               <UserPlus className="h-4 w-4 mr-2" />
-              Ajouter
+              Ajouter un utilisateur
             </button>
           </div>
         </div>
@@ -190,7 +252,15 @@ const UsersManagement: React.FC = () => {
         </div>
         <div className="bg-white rounded-lg p-4 border border-gray-200">
           <p className="text-sm text-gray-500">Nouveaux ce mois</p>
-          <p className="text-2xl font-bold">24</p>
+          <p className="text-2xl font-bold">
+            {users.filter(u => {
+              const created = new Date(u.created_at);
+              const now = new Date();
+              const diffTime = Math.abs(now.getTime() - created.getTime());
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              return diffDays <= 30;
+            }).length}
+          </p>
         </div>
       </div>
 
@@ -221,10 +291,17 @@ const UsersManagement: React.FC = () => {
                       <div className="flex items-center">
                         <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
                           {user.photo ? (
-                            <img src={user.photo} alt={user.name} className="h-10 w-10 rounded-full" />
+                            <img 
+                              src={user.photo.startsWith('http') ? user.photo : `/storage/${user.photo}`} 
+                              alt={user.name} 
+                              className="h-10 w-10 rounded-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/40';
+                              }}
+                            />
                           ) : (
-                            <span className="text-gray-600 font-medium">
-                              {user.name.charAt(0)}
+                            <span className="text-gray-600 font-medium text-lg">
+                              {user.name.charAt(0).toUpperCase()}
                             </span>
                           )}
                         </div>
@@ -242,7 +319,9 @@ const UsersManagement: React.FC = () => {
                     <td className="px-6 py-4">
                       <p className="text-sm text-gray-900">{user.phone}</p>
                       {user.address && (
-                        <p className="text-sm text-gray-500 truncate max-w-xs">{user.address}</p>
+                        <p className="text-sm text-gray-500 truncate max-w-xs" title={user.address}>
+                          {user.address.length > 50 ? user.address.substring(0, 50) + '...' : user.address}
+                        </p>
                       )}
                     </td>
                     <td className="px-6 py-4">
@@ -255,14 +334,23 @@ const UsersManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-sm text-gray-900">
-                        {new Date(user.created_at).toLocaleDateString('fr-FR')}
+                        {new Date(user.created_at).toLocaleDateString('fr-FR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric'
+                        })}
                       </p>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => handleToggleActive(user.id)}
-                          className={`px-3 py-1 rounded text-sm ${user.is_active ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}
+                          className={`px-3 py-1 rounded text-sm font-medium hover:opacity-80 transition-opacity ${
+                            user.is_active 
+                              ? 'bg-red-50 text-red-700 hover:bg-red-100' 
+                              : 'bg-green-50 text-green-700 hover:bg-green-100'
+                          }`}
+                          title={user.is_active ? 'Désactiver l\'utilisateur' : 'Activer l\'utilisateur'}
                         >
                           {user.is_active ? 'Désactiver' : 'Activer'}
                         </button>
@@ -270,7 +358,8 @@ const UsersManagement: React.FC = () => {
                         <select
                           value={user.role}
                           onChange={(e) => handleUpdateRole(user.id, e.target.value as UserRole)}
-                          className="px-2 py-1 border border-gray-300 rounded text-sm"
+                          className="px-2 py-1 border border-gray-300 rounded text-sm bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          title="Changer le rôle"
                         >
                           <option value="client">Client</option>
                           <option value="pharmacien">Pharmacien</option>
@@ -280,7 +369,8 @@ const UsersManagement: React.FC = () => {
                         
                         <button
                           onClick={() => handleDeleteUser(user.id)}
-                          className="px-3 py-1 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200"
+                          className="px-3 py-1 bg-red-50 text-red-700 rounded text-sm font-medium hover:bg-red-100 hover:opacity-80 transition-opacity"
+                          title="Supprimer l'utilisateur"
                         >
                           Supprimer
                         </button>
@@ -293,9 +383,25 @@ const UsersManagement: React.FC = () => {
           </div>
         )}
 
-        {/* Pagination */}
+        {/* Aucun résultat */}
+        {!loading && filteredUsers.length === 0 && (
+          <div className="text-center py-12">
+            <UserPlus className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun utilisateur trouvé</h3>
+            <p className="text-gray-600 mb-4">Aucun utilisateur ne correspond à vos critères de recherche.</p>
+            <button
+              onClick={handleAddUser}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center"
+            >
+              <UserPlus className="h-4 w-4 mr-2" />
+              Ajouter un premier utilisateur
+            </button>
+          </div>
+        )}
+
+        {/* Pagination (simplifiée pour l'instant) */}
         {filteredUsers.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-200">
+          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-700">
                 Affichage de <span className="font-medium">1</span> à{' '}
@@ -303,28 +409,28 @@ const UsersManagement: React.FC = () => {
                 <span className="font-medium">{users.length}</span> utilisateurs
               </p>
               <div className="flex space-x-2">
-                <button className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50">
+                <button 
+                  className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled
+                >
                   Précédent
                 </button>
-                <button className="px-3 py-1 bg-blue-600 text-white rounded text-sm">
+                <button className="px-3 py-1 bg-blue-600 text-white rounded text-sm font-medium">
                   1
                 </button>
-                <button className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50">
-                  2
-                </button>
-                <button className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50">
+                {Math.ceil(users.length / 10) > 1 && (
+                  <button className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-100">
+                    2
+                  </button>
+                )}
+                <button 
+                  className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={Math.ceil(users.length / 10) <= 1}
+                >
                   Suivant
                 </button>
               </div>
             </div>
-          </div>
-        )}
-
-        {filteredUsers.length === 0 && (
-          <div className="text-center py-12">
-            <UserPlus className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun utilisateur trouvé</h3>
-            <p className="text-gray-600">Aucun utilisateur ne correspond à vos critères de recherche.</p>
           </div>
         )}
       </div>

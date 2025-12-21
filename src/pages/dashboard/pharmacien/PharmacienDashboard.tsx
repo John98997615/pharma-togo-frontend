@@ -15,7 +15,8 @@ import {
   BarChart3,
   Calendar,
   Store,
-  RefreshCw
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'react-hot-toast';
@@ -45,16 +46,16 @@ const PharmacienDashboard: React.FC = () => {
   // Fonction améliorée pour récupérer la pharmacie
   const fetchPharmacy = async (forceRefresh = false) => {
     setLoadingPharmacy(true);
-    
+
     try {
       console.log('🔄 Fetching pharmacy data...');
       console.log('User object:', user);
       console.log('User pharmacy property:', user?.pharmacy);
-      
+
       // ESSAI 1: Vérifier si la pharmacie est directement dans l'objet user
       if (user?.pharmacy && typeof user.pharmacy === 'object') {
         console.log('📦 Pharmacy found in user object:', user.pharmacy);
-        
+
         // Si c'est un objet complet avec id, l'utiliser directement
         if (user.pharmacy.id && user.pharmacy.name) {
           console.log('✅ Using pharmacy from user object');
@@ -63,21 +64,21 @@ const PharmacienDashboard: React.FC = () => {
           return;
         }
       }
-      
+
       // ESSAI 2: Récupérer toutes les pharmacies et trouver celle de l'utilisateur
       console.log('🔍 Fetching all pharmacies to find user pharmacy...');
       const allPharmacies = await pharmacyService.getAll();
       console.log('All pharmacies:', allPharmacies);
-      
+
       // Trouver la pharmacie qui appartient à cet utilisateur
-      const userPharmacy = Array.isArray(allPharmacies) 
+      const userPharmacy = Array.isArray(allPharmacies)
         ? allPharmacies.find((p: Pharmacy) => p.user_id === user?.id)
         : null;
-      
+
       if (userPharmacy) {
         console.log('✅ Found user pharmacy:', userPharmacy);
         setPharmacy(userPharmacy);
-        
+
         // Mettre à jour l'utilisateur avec la pharmacie trouvée
         if (user) {
           const updatedUser = {
@@ -91,10 +92,10 @@ const PharmacienDashboard: React.FC = () => {
         console.log('❌ No pharmacy found for this user');
         setPharmacy(null);
       }
-      
+
     } catch (error: any) {
       console.error('❌ Error in fetchPharmacy:', error);
-      
+
       // Essayer une approche différente en cas d'erreur
       if (retryCount < 3 && !forceRefresh) {
         setRetryCount((prev: number) => prev + 1);
@@ -138,34 +139,54 @@ const PharmacienDashboard: React.FC = () => {
   // Calculer les statistiques
   useEffect(() => {
     if (pharmacy && medicamentsData && commandesData) {
-      const medicaments = medicamentsData.data || medicamentsData;
-      const commandes = commandesData.data || commandesData;
+      console.log('🔄 Calcul des statistiques...');
 
-      // Commandes d'aujourd'hui
-      const today = new Date().toISOString().split('T')[0];
-      const todayOrders = Array.isArray(commandes)
-        ? commandes.filter((c: Commande) => c.created_at && c.created_at.startsWith(today))
-        : [];
+      try {
+        // Convertir les données en any pour éviter les erreurs TypeScript
+        const medicamentsAny = medicamentsData as any;
+        const commandesAny = commandesData as any;
 
-      // Calcul des statistiques
-      setStats({
-        totalMedicaments: Array.isArray(medicaments) ? medicaments.length : 0,
-        lowStock: Array.isArray(medicaments)
-          ? medicaments.filter((m: Medicament) => m.quantity < 10).length
-          : 0,
-        pendingOrders: Array.isArray(commandes)
-          ? commandes.filter((c: Commande) => c.status === 'en_attente').length
-          : 0,
-        todayRevenue: Array.isArray(todayOrders)
-          ? todayOrders.reduce((sum: number, c: Commande) => sum + (c.total_amount || 0), 0)
-          : 0,
-        confirmedOrders: Array.isArray(commandes)
-          ? commandes.filter((c: Commande) => c.status === 'confirmee').length
-          : 0,
-        deliveredOrders: Array.isArray(commandes)
-          ? commandes.filter((c: Commande) => c.status === 'livree').length
-          : 0,
-      });
+        // Extraire les tableaux simplement
+        const medicamentsArray = (
+          Array.isArray(medicamentsAny) ? medicamentsAny :
+            Array.isArray(medicamentsAny?.data) ? medicamentsAny.data :
+              medicamentsAny?.data ? [medicamentsAny.data] : []
+        ) as Medicament[];
+
+        const commandesArray = (
+          Array.isArray(commandesAny) ? commandesAny :
+            Array.isArray(commandesAny?.data) ? commandesAny.data :
+              commandesAny?.data ? [commandesAny.data] : []
+        ) as Commande[];
+
+        console.log('✅ Médicaments:', medicamentsArray.length);
+        console.log('✅ Commandes:', commandesArray.length);
+
+        // Calcul du revenu d'aujourd'hui
+        const today = new Date().toISOString().split('T')[0];
+        let todayRevenue = 0;
+
+        commandesArray.forEach((commande: Commande) => {
+          if (commande.created_at && commande.created_at.startsWith(today)) {
+            const amount = Number(commande.total_amount) || 0;
+            todayRevenue += amount;
+          }
+        });
+
+        // Mettre à jour les stats
+        setStats({
+          totalMedicaments: medicamentsArray.length,
+          lowStock: medicamentsArray.filter(m => m.quantity < 10).length,
+          pendingOrders: commandesArray.filter(c => c.status === 'en_attente').length,
+          todayRevenue: todayRevenue,
+          confirmedOrders: commandesArray.filter(c => c.status === 'confirmee').length,
+          deliveredOrders: commandesArray.filter(c => c.status === 'livree').length,
+        });
+
+        console.log('💰 Revenu aujourd\'hui:', todayRevenue);
+      } catch (error) {
+        console.error('❌ Erreur calcul statistiques:', error);
+      }
     }
   }, [pharmacy, medicamentsData, commandesData]);
 
@@ -265,7 +286,7 @@ const PharmacienDashboard: React.FC = () => {
                   Vérifier
                 </button>
               </div>
-              
+
               <div className="text-left space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Rôle utilisateur:</span>
@@ -287,7 +308,7 @@ const PharmacienDashboard: React.FC = () => {
             </div>
 
             <p className="text-gray-600 mb-6">
-              {user?.pharmacy 
+              {user?.pharmacy
                 ? "Votre compte a une pharmacie référencée mais elle n'a pas pu être chargée."
                 : "Vous êtes pharmacien mais n'avez pas encore de pharmacie associée à votre compte."
               }
@@ -303,7 +324,7 @@ const PharmacienDashboard: React.FC = () => {
                   <PlusCircle className="h-5 w-5 mr-2" />
                   Créer une nouvelle pharmacie
                 </button>
-                
+
                 <button
                   onClick={handleForceRefresh}
                   className="w-full px-6 py-3 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-medium flex items-center justify-center"
@@ -311,7 +332,7 @@ const PharmacienDashboard: React.FC = () => {
                   <RefreshCw className="h-5 w-5 mr-2" />
                   Rechercher à nouveau ma pharmacie
                 </button>
-                
+
                 <button
                   onClick={() => window.location.href = 'mailto:admin@pharmatogo.tg?subject=Problème%20pharmacie%20non%20chargée'}
                   className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium flex items-center justify-center"
@@ -338,7 +359,7 @@ const PharmacienDashboard: React.FC = () => {
   return (
     <div className="p-6">
       {/* <DebugPanel /> */}
-      
+
       {/* En-tête */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -375,7 +396,7 @@ const PharmacienDashboard: React.FC = () => {
             </div>
             <p className="text-gray-500 mt-1">{pharmacy.address}</p>
             <p className="text-sm text-gray-400 mt-1">
-               • Créée le: {new Date(pharmacy.created_at).toLocaleDateString()}
+              • Créée le: {new Date(pharmacy.created_at).toLocaleDateString()}
             </p>
           </div>
 
@@ -615,9 +636,10 @@ const PharmacienDashboard: React.FC = () => {
                   </div>
                   <Link
                     to={`/pharmacien/commandes/${commande.id}`}
-                    className="ml-4 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                    className="ml-4 text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center"
                   >
-                    Détails
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    Détails complets
                   </Link>
                 </div>
               ))}

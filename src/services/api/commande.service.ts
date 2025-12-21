@@ -41,7 +41,11 @@ export const commandeService = {
 
     // GET /api/commandes/{commande}
     getById: async (id: number): Promise<Commande> => {
-        const response = await axiosClient.get(`/commandes/${id}`);
+        const response = await axiosClient.get(`/commandes/${id}`, {
+            params: {
+                with: 'user,pharmacy,items'
+            },
+        });
         return response.data;
     },
 

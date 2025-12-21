@@ -1,12 +1,14 @@
-
 // src/services/api/livraison.service.ts
-
 import axiosClient from './axiosClient';
 import { Livraison, LivraisonStatus } from '../../types/livraison.types';
 
 export interface UpdatePositionData {
   latitude: number;
   longitude: number;
+}
+
+export interface AssignLivreurData {
+  livreur_id: number;
 }
 
 export const livraisonService = {
@@ -41,6 +43,39 @@ export const livraisonService = {
       console.error('Error fetching livraisons:', error);
       return [];
     }
+  },
+
+  // AJOUTEZ CETTE MÉTHODE POUR L'ASSIGNATION DES LIVREURS
+  assignLivreur: async (commandeId: number, livreurId: number): Promise<Livraison> => {
+    try {
+      const response = await axiosClient.post(`/commandes/${commandeId}/assign-livreur`, {
+        livreur_id: livreurId
+      });
+
+      // Gérer différents formats de réponse API
+      if (response.data && typeof response.data === 'object') {
+        if ('livraison' in response.data) {
+          return response.data.livraison as Livraison;
+        }
+        if ('data' in response.data) {
+          return response.data.data as Livraison;
+        }
+        return response.data as Livraison;
+      }
+
+      throw new Error('Format de réponse inattendu');
+    } catch (error: any) {
+      console.error('Error assigning livreur:', error);
+      throw new Error(error.response?.data?.message || 'Erreur lors de l\'assignation du livreur');
+    }
+  },
+
+  // AUTRE VERSION PLUS SIMPLE SI L'API RENVOIE DIRECTEMENT LA LIVRAISON
+  assignLivreurSimple: async (commandeId: number, livreurId: number): Promise<Livraison> => {
+    const response = await axiosClient.post(`/commandes/${commandeId}/assign-livreur`, {
+      livreur_id: livreurId
+    });
+    return response.data.livraison;
   },
 
   getLivreurStatistics: async (): Promise<any> => {
@@ -80,6 +115,36 @@ export const livraisonService = {
     } catch (error) {
       console.error('Error updating livraison position:', error);
       throw error;
+    }
+  },
+
+  // AJOUTEZ CES MÉTHODES SI ELLES EXISTENT DANS VOTRE API LARAVEL
+  getByCommandeId: async (commandeId: number): Promise<Livraison | null> => {
+    try {
+      const response = await axiosClient.get(`/livraisons?commande_id=${commandeId}`);
+      
+      if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+        return response.data[0] as Livraison;
+      }
+      
+      if (response.data && response.data.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
+        return response.data.data[0] as Livraison;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching livraison by commande:', error);
+      return null;
+    }
+  },
+
+  getByLivreur: async (livreurId: number): Promise<Livraison[]> => {
+    try {
+      const response = await axiosClient.get(`/livraisons?livreur_id=${livreurId}`);
+      return response.data.data || response.data || [];
+    } catch (error) {
+      console.error('Error fetching livraisons by livreur:', error);
+      return [];
     }
   }
 };

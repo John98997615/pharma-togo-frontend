@@ -9,40 +9,36 @@ import {
   Star, 
   AlertTriangle,
   Navigation,
-  Building
+  Building,
+  Package
 } from 'lucide-react';
 import { Pharmacy } from '../../types/pharmacy.types';
 
-// Fonction pour formater l'URL du logo
-const formatLogoUrl = (logoUrl: any): string => {
-  if (!logoUrl) return '';
+// Fonction SIMPLIFIÉE pour obtenir l'URL de l'image
+const getImageUrl = (logo: any): string => {
+  if (!logo) return '';
   
-  let url = logoUrl;
-  
-  // Si c'est un objet Laravel
-  if (typeof logoUrl === 'object' && logoUrl.url) {
-    url = logoUrl.url;
-  } else if (typeof logoUrl === 'object' && logoUrl.path) {
-    url = logoUrl.path;
-  }
-  
-  // Si c'est une chaîne
-  if (typeof url === 'string') {
-    // Si c'est déjà une URL complète
-    if (url.startsWith('http') || url.startsWith('data:') || url.startsWith('blob:')) {
-      return url;
+  // Si c'est une URL complète
+  if (typeof logo === 'string') {
+    if (logo.startsWith('http') || logo.startsWith('data:') || logo.startsWith('blob:')) {
+      return logo;
     }
     
-    // Si c'est un chemin absolu
-    if (url.startsWith('/')) {
+    // Si c'est un chemin relatif, construire l'URL complète
+    if (logo.startsWith('/')) {
       const baseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:8000';
-      return `${baseUrl}${url}`;
+      return `${baseUrl}${logo}`;
     }
     
     // Sinon, supposer que c'est un chemin de stockage
     const baseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:8000';
-    const cleanPath = url.replace(/^storage\//, '');
-    return `${baseUrl}/storage/${cleanPath}`;
+    return `${baseUrl}/storage/${logo.replace(/^storage\//, '')}`;
+  }
+  
+  // Si c'est un objet, prendre l'URL ou le chemin
+  if (typeof logo === 'object') {
+    if (logo.url) return getImageUrl(logo.url);
+    if (logo.path) return getImageUrl(logo.path);
   }
   
   return '';
@@ -79,34 +75,30 @@ const PharmacyCard: React.FC<PharmacyCardProps> = ({
     }
   };
 
-  // Formater l'URL du logo
-  const logoUrl = formatLogoUrl(pharmacy.logo);
+  // Obtenir l'URL de l'image UNE FOIS
+  const logoUrl = getImageUrl(pharmacy.logo);
 
   return (
     <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
-      {/* En-tête avec image */}
-      <div className="h-48 relative">
+      {/* En-tête avec image - SIMPLIFIÉ */}
+      <div className="h-48 relative bg-gradient-to-r from-blue-500 to-blue-700">
         {logoUrl ? (
           <img
             src={logoUrl}
             alt={pharmacy.name}
             className="h-full w-full object-cover"
+            loading="lazy"
             onError={(e) => {
-              console.error('Error loading pharmacy logo:', logoUrl);
-              (e.target as HTMLImageElement).src = '/placeholder-pharmacy.png';
-              (e.target as HTMLImageElement).className = 'h-full w-full bg-gradient-to-r from-blue-500 to-blue-700 flex items-center justify-center';
-              (e.target as HTMLImageElement).innerHTML = `
-                <span class="text-white text-2xl font-bold">
-                  ${pharmacy.name.charAt(0)}
-                </span>
-              `;
+              // En cas d'erreur, afficher l'icône à la place
+              e.currentTarget.style.display = 'none';
             }}
           />
-        ) : (
-          <div className="h-full w-full bg-gradient-to-r from-blue-500 to-blue-700 flex items-center justify-center">
-            <Building className="h-16 w-16 text-white" />
-          </div>
-        )}
+        ) : null}
+        
+        {/* Icône de secours si pas d'image ou image échouée */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Building className="h-16 w-16 text-white opacity-80" />
+        </div>
         
         {/* Badges */}
         <div className="absolute top-3 left-3 space-y-1">
@@ -135,9 +127,8 @@ const PharmacyCard: React.FC<PharmacyCardProps> = ({
         </div>
       </div>
 
-      {/* Contenu */}
+      {/* Le reste du code reste inchangé... */}
       <div className="p-6">
-        {/* Nom et description */}
         <div className="mb-4">
           <h3 className="text-xl font-bold text-gray-900 mb-2">{pharmacy.name}</h3>
           {pharmacy.description && (
@@ -145,7 +136,6 @@ const PharmacyCard: React.FC<PharmacyCardProps> = ({
           )}
         </div>
 
-        {/* Informations de contact */}
         <div className="space-y-3 mb-6">
           <div className="flex items-center text-gray-600">
             <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
@@ -167,24 +157,25 @@ const PharmacyCard: React.FC<PharmacyCardProps> = ({
           </div>
         </div>
 
-        {/* Statistiques */}
         <div className="grid grid-cols-2 gap-4 mb-6">
           <div className="text-center p-3 bg-blue-50 rounded-lg">
-            <p className="text-2xl font-bold text-blue-600">
-              {pharmacy.medicaments?.length || 0}
-            </p>
-            <p className="text-xs text-gray-600">Médicaments</p>
+            <div className="flex items-center justify-center">
+              <Package className="h-5 w-5 text-blue-600 mr-1" />
+              <p className="text-2xl font-bold text-blue-600">
+                {pharmacy.medicaments?.length || 0}
+              </p>
+            </div>
+            <p className="text-xs text-gray-600 mt-1">Médicaments</p>
           </div>
           <div className="text-center p-3 bg-green-50 rounded-lg">
             <div className="flex items-center justify-center">
-              <Star className="h-4 w-4 text-yellow-500 mr-1" />
+              <Star className="h-5 w-5 text-yellow-500 mr-1" />
               <p className="text-2xl font-bold text-green-600">4.8</p>
             </div>
-            <p className="text-xs text-gray-600">Note</p>
+            <p className="text-xs text-gray-600 mt-1">Note</p>
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex flex-col space-y-3">
           <div className="flex space-x-3">
             <Link
