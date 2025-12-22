@@ -1,7 +1,8 @@
 // src/components/paiements/CashPaiement.tsx
 import React, { useState } from 'react';
-import { DollarSign, CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { DollarSign, CheckCircle, AlertCircle, Clock, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useCashPaiement } from '../../hooks/useCashPaiement';
 
 interface CashPaiementProps {
   commandeId: number;
@@ -16,29 +17,38 @@ const CashPaiement: React.FC<CashPaiementProps> = ({
   onSuccess,
   onCancel,
 }) => {
-  const [isProcessing, setIsProcessing] = useState(false);
   const [codeRecu, setCodeRecu] = useState('');
+  const {
+    isProcessing,
+    paiement,
+    error,
+    confirmerPaiement,
+    annulerPaiement,
+    reset
+  } = useCashPaiement(commandeId);
 
   const handleConfirm = async () => {
-    if (!codeRecu.trim()) {
-      toast.error('Veuillez entrer le code de reçu');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      // Simuler la confirmation du paiement cash
-      // En réalité, vous appelleriez paiementService.confirmerPaiementCash()
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      toast.success('Paiement cash confirmé avec succès');
+    const success = await confirmerPaiement(codeRecu);
+    if (success) {
       onSuccess();
-    } catch (error) {
-      toast.error('Erreur lors de la confirmation du paiement');
-      console.error(error);
-    } finally {
-      setIsProcessing(false);
     }
+  };
+
+  const handleCancel = async () => {
+    if (paiement) {
+      try {
+        await annulerPaiement();
+      } catch (error) {
+        // L'erreur est déjà gérée dans le hook
+        return;
+      }
+    }
+    onCancel();
+  };
+
+  const handleReset = () => {
+    setCodeRecu('');
+    reset();
   };
 
   return (

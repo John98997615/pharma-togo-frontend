@@ -1,8 +1,8 @@
-// src/context/NotificationContext.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Notification } from '../types/notification.types';
 import { notificationService } from '../services/api/notification.service';
 import { useAuth } from './AuthContext';
+import { toast } from 'react-hot-toast';
 
 interface NotificationContextType {
   notifications: Notification[];
@@ -29,12 +29,19 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setIsLoading(true);
     try {
       const [allNotifications, countData] = await Promise.all([
-        notificationService.getAll(),
-        notificationService.getCount()
+        notificationService.getAll().catch(err => {
+          console.error('Erreur chargement notifications:', err);
+          toast.error('Erreur chargement notifications');
+          return [];
+        }),
+        notificationService.getCount().catch(err => {
+          console.error('Erreur comptage notifications:', err);
+          return { count: 0 };
+        })
       ]);
       
       setNotifications(allNotifications);
-      setUnreadCount(countData.count);
+      setUnreadCount(countData.count || 0);
     } catch (error) {
       console.error('Erreur lors du chargement des notifications:', error);
     } finally {
@@ -56,9 +63,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const markAsRead = async (id: number) => {
     try {
       await notificationService.markAsRead(id);
-      await refreshNotifications();
+      // Mettre à jour localement sans recharger toutes les notifications
+      setNotifications(prev => 
+        prev.map(notification => 
+          notification.id === id 
+            ? { ...notification, read_at: new Date().toISOString() }
+            : notification
+        )
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
       console.error('Erreur lors du marquage comme lu:', error);
+      toast.error('Erreur lors du marquage comme lu');
       throw error;
     }
   };
@@ -66,9 +82,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const markAllAsRead = async () => {
     try {
       await notificationService.markAllAsRead();
-      await refreshNotifications();
+      // Mettre à jour localement toutes les notifications comme lues
+      setNotifications(prev => 
+        prev.map(notification => ({
+          ...notification,
+          read_at: new Date().toISOString()
+        }))
+      );
+      setUnreadCount(0);
+      toast.success('Toutes les notifications marquées comme lues');
     } catch (error) {
       console.error('Erreur lors du marquage de tout comme lu:', error);
+      toast.error('Erreur lors du marquage de tout comme lu');
       throw error;
     }
   };
@@ -76,9 +101,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const deleteNotification = async (id: number) => {
     try {
       await notificationService.delete(id);
-      await refreshNotifications();
+      // Supprimer localement
+      const deletedNotification = notifications.find(n => n.id === id);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      
+      // Mettre à jour le compteur si la notification était non lue
+      if (deletedNotification && !deletedNotification.read_at) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
+      toast.error('Erreur lors de la suppression');
       throw error;
     }
   };
@@ -86,9 +119,12 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const deleteAllNotifications = async () => {
     try {
       await notificationService.deleteAll();
-      await refreshNotifications();
+      setNotifications([]);
+      setUnreadCount(0);
+      toast.success('Toutes les notifications supprimées');
     } catch (error) {
       console.error('Erreur lors de la suppression de tout:', error);
+      toast.error('Erreur lors de la suppression de tout');
       throw error;
     }
   };

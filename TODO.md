@@ -1,54 +1,81 @@
-# Plan de Correction - Gestion des Images des Médicaments
+# Plan de Modernisation des Paiements
 
-## Problèmes Identifiés
+## Objectif
+Remplacer les simulations par les vrais appels API dans les composants de paiement en suivant la logique existante du projet.
 
-### 1. Conflit de Type de Données
-- `initialData.image` contient une URL string (ex: "medicaments/image.jpg")
-- Le champ file attend un FileList
-- watch('image') renvoie une URL string lors de l'édition, pas un FileList
+## Analyse de l'existant
+- ✅ Composants CashPaiement.tsx et MobileMoneyPaiement.tsx identifiés
+- ✅ Service paiement.service.ts existant avec méthodes de base
+- ✅ Types et validateurs définis
+- ❌ Méthodes Mobile Money manquantes dans le service
+- ❌ Hooks personnalisés absents
+- ❌ Gestion d'erreurs incomplète
 
-### 2. Logique de Soumission Incorrecte
-- Le formulaire vérifie `data.image.length > 0` mais pour une URL string, `length` est undefined
-- Lors de la modification, aucune image n'est envoyée au serveur même si l'URL existe
+## Étapes à réaliser
 
-### 3. Écrasement des Valeurs
-- Les valeurs par défaut dans `useForm` peuvent écraser les données existantes
-- Problème lors du reset du formulaire avec les données initiales
+### 1. Extension du Service Paiement ✅
+- [x] Ajouter méthode `initierPaiementMobileMoney()` dans `paiement.service.ts`
+- [x] Ajouter méthode `confirmerPaiementMobileMoney()` dans `paiement.service.ts`
+- [x] Ajouter méthode `annulerPaiement()` dans `paiement.service.ts`
+- [x] Améliorer la gestion des erreurs et types de réponse
+- [x] Ajouter la méthode `getPaiementByCommande()`
+- [x] Implémenter la fonction de polling automatique
 
+### 2. Création des Hooks Personnalisés ✅
+- [x] Créer `useCashPaiement.ts` hook personnalisé
+- [x] Créer `useMobileMoneyPaiement.ts` hook personnalisé
+- [x] Implémenter la gestion d'états (loading, error, success)
+- [x] Ajouter la logique de retry automatique
+- [x] Implémenter la vérification périodique du statut (polling)
 
-## Plan de Correction
+### 3. Mise à jour des Composants ✅
+- [x] Refactorer `CashPaiement.tsx` pour utiliser le hook `useCashPaiement`
+- [x] Refactorer `MobileMoneyPaiement.tsx` pour utiliser le hook `useMobileMoneyPaiement`
+- [x] Améliorer la gestion des états UI
+- [x] Optimiser les messages d'erreur utilisateur
 
-### Phase 1: Modification de MedicamentForm.tsx
-- [x] 1.1. Ajouter un état pour distinguer création vs modification
-- [x] 1.2. Créer une logique separate pour la gestion d'image selon le contexte
-- [x] 1.3. Corriger la soumission des données pour gérer les images correctement
-- [x] 1.4. Améliorer la gestion des valeurs par défaut
-- [x] 1.5. Ajouter une logique pour détecter si une nouvelle image a été sélectionnée
+### 4. Améliorations UX ✅
+- [x] Ajouter les indicateurs de progression (loading states)
+- [x] Améliorer les messages de confirmation (toast notifications)
+- [x] Implémenter les notifications en temps réel (polling)
+- [x] Ajouter la gestion des timeouts et erreurs
 
-### Phase 2: Modification de MedicamentsManagement.tsx
-- [x] 2.1. Corriger le passage des données initiales
-- [x] 2.2. S'assurer que les données sont bien formatées avant envoi
-- [x] 2.3. Passer le prop isEditing au formulaire
+### 5. Tests et Validation 🔄
+- [ ] Tester les scénarios de succès
+- [ ] Tester les scénarios d'erreur
+- [ ] Valider les intégrations avec le backend
+- [ ] Tester les cas edge (connexion perdue, etc.)
 
+## Architecture Technique
 
-### Phase 3: Tests et Validation
-- [ ] 3.1. Tester la création d'un nouveau médicament avec image
-- [ ] 3.2. Tester la modification d'un médicament existant avec image
-- [ ] 3.3. Tester la modification sans changement d'image
-- [ ] 3.4. Vérifier que les valeurs ne sont plus écrasées
+### Service Paiement Étendu
+```typescript
+paiementService = {
+  initierPaiement: (commandeId, data) => Promise<Paiement>
+  verifierStatut: (paiementId) => Promise<Paiement>
+  confirmerPaiementCash: (paiementId, codeRecu) => Promise<Paiement>
+  initierPaiementMobileMoney: (commandeId, operateur, numero) => Promise<Paiement>
+  confirmerPaiementMobileMoney: (paiementId, codeSecret) => Promise<Paiement>
+  annulerPaiement: (paiementId) => Promise<void>
+}
+```
 
-## Détails Techniques
+### Hooks Personnalisés
+```typescript
+useCashPaiement = (commandeId) => {
+  states: { isProcessing, paiement, error }
+  actions: { confirmerPaiement, annulerPaiement }
+}
 
-### Logique de Gestion d'Image
-- **Création** : Image requise, FileList uniquement
-- **Modification** : Image optionnelle, si pas de nouvelle image = garder l'ancienne
-- **Détection de changement** : Comparer l'image actuelle avec l'image initiale
+useMobileMoneyPaiement = (commandeId) => {
+  states: { isProcessing, paiement, error, step }
+  actions: { initierPaiement, confirmerPaiement, annulerPaiement }
+}
+```
 
-### Structure de Données
-- **Création** : `{...formData, image: FileList}`
-- **Modification** : `{...formData, image?: FileList}` (optionnel)
-
-## Prochaines Étapes
-1. Implémenter les corrections
-2. Tester les différents scénarios
-3. Valider que les bugs sont résolus
+## Notes d'implémentation
+- Conserver la structure UI existante
+- Maintenir la compatibilité avec les composants parents
+- Respecter les conventions de nommage du projet
+- Utiliser les types TypeScript définis
+- Gérer les erreurs de manière utilisateur-friendly

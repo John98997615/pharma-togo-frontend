@@ -1,8 +1,9 @@
 // src/components/paiements/MobileMoneyPaiement.tsx
 import React, { useState } from 'react';
-import { Smartphone, QrCode, AlertCircle, Shield } from 'lucide-react';
+import { Smartphone, QrCode, AlertCircle, Shield, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Operateur } from '../../types/paiement.types';
+import { useMobileMoneyPaiement } from '../../hooks/useMobileMoneyPaiement';
 
 interface MobileMoneyPaiementProps {
   commandeId: number;
@@ -19,8 +20,20 @@ const MobileMoneyPaiement: React.FC<MobileMoneyPaiementProps> = ({
 }) => {
   const [operateur, setOperateur] = useState<Operateur>('mtn');
   const [numeroTelephone, setNumeroTelephone] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [step, setStep] = useState<'form' | 'confirmation' | 'success'>('form');
+  const [codeSecret, setCodeSecret] = useState('');
+
+  const {
+    isProcessing,
+    paiement,
+    error,
+    step,
+    initierPaiement,
+    confirmerPaiement,
+    annulerPaiement,
+    reset,
+    startPolling,
+    stopPolling
+  } = useMobileMoneyPaiement(commandeId);
 
   const operateurs = [
     { id: 'mtn', name: 'MTN Mobile Money', color: 'bg-yellow-500' },
@@ -40,32 +53,32 @@ const MobileMoneyPaiement: React.FC<MobileMoneyPaiementProps> = ({
       return;
     }
 
-    setStep('confirmation');
+    const success = await initierPaiement(operateur, numeroTelephone);
+    if (success) {
+      // Démarrer le polling automatique pour vérifier le statut
+      startPolling();
+    }
   };
 
   const handleConfirm = async () => {
-    setIsProcessing(true);
-    try {
-      // Simuler le paiement
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Générer un numéro de transaction fictif
-      const transactionId = `MM-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      toast.success('Paiement Mobile Money initié avec succès');
-      setStep('success');
-      
-      // Simuler un délai avant de retourner le succès
-      setTimeout(() => {
-        onSuccess(transactionId);
-      }, 2000);
-    } catch (error) {
-      toast.error('Erreur lors du paiement');
-      console.error(error);
-      setStep('form');
-    } finally {
-      setIsProcessing(false);
+    const success = await confirmerPaiement(codeSecret);
+    if (success) {
+      // Le hook gère automatiquement la transition vers le succès
+      const transactionId = paiement?.numero_transaction || `MM-${Date.now()}`;
+      onSuccess(transactionId);
     }
+  };
+
+  const handleCancel = async () => {
+    stopPolling();
+    await annulerPaiement();
+    onCancel();
+  };
+
+  const handleReset = () => {
+    setNumeroTelephone('');
+    setCodeSecret('');
+    reset();
   };
 
   if (step === 'confirmation') {
@@ -110,9 +123,26 @@ const MobileMoneyPaiement: React.FC<MobileMoneyPaiementProps> = ({
           </ul>
         </div>
 
+        {/* Code secret */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Code secret Mobile Money
+          </label>
+          <input
+            type="password"
+            value={codeSecret}
+            onChange={(e) => setCodeSecret(e.target.value)}
+            placeholder="Entrez votre code secret"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          />
+          <p className="mt-1 text-sm text-gray-500">
+            Code secret à 4 chiffres pour confirmer le paiement
+          </p>
+        </div>
+
         <div className="flex space-x-4">
           <button
-            onClick={() => setStep('form')}
+            onClick={handleReset}
             className="flex-1 px-4 py-3 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50"
             disabled={isProcessing}
           >
@@ -120,7 +150,7 @@ const MobileMoneyPaiement: React.FC<MobileMoneyPaiementProps> = ({
           </button>
           <button
             onClick={handleConfirm}
-            disabled={isProcessing}
+            disabled={isProcessing || !codeSecret.trim()}
             className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
           >
             {isProcessing ? (
@@ -132,7 +162,7 @@ const MobileMoneyPaiement: React.FC<MobileMoneyPaiementProps> = ({
                 En cours...
               </span>
             ) : (
-              'Confirmer'
+              'Confirmer le paiement'
             )}
           </button>
         </div>
@@ -153,7 +183,7 @@ const MobileMoneyPaiement: React.FC<MobileMoneyPaiementProps> = ({
           <p className="text-gray-600 mb-6">
             Votre paiement Mobile Money a été initié. Vérifiez votre téléphone pour compléter la transaction.
           </p>
-          
+
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
             <p className="font-medium text-gray-700">
               Numéro de transaction: <span className="font-mono">MM-{Date.now().toString().slice(-8)}</span>
@@ -196,11 +226,10 @@ const MobileMoneyPaiement: React.FC<MobileMoneyPaiementProps> = ({
               key={op.id}
               type="button"
               onClick={() => setOperateur(op.id as Operateur)}
-              className={`p-4 rounded-lg border-2 transition-all ${
-                operateur === op.id
-                  ? 'border-purple-500 bg-purple-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
+              className={`p-4 rounded-lg border-2 transition-all ${operateur === op.id
+                ? 'border-purple-500 bg-purple-50'
+                : 'border-gray-200 hover:border-gray-300'
+                }`}
             >
               <div className="flex items-center space-x-2">
                 <div className={`h-3 w-3 rounded-full ${op.color}`}></div>
