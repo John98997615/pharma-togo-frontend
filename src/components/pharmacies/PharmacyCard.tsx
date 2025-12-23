@@ -14,35 +14,8 @@ import {
 } from 'lucide-react';
 import { Pharmacy } from '../../types/pharmacy.types';
 
-// Fonction SIMPLIFIÉE pour obtenir l'URL de l'image
-const getImageUrl = (logo: any): string => {
-  if (!logo) return '';
-  
-  // Si c'est une URL complète
-  if (typeof logo === 'string') {
-    if (logo.startsWith('http') || logo.startsWith('data:') || logo.startsWith('blob:')) {
-      return logo;
-    }
-    
-    // Si c'est un chemin relatif, construire l'URL complète
-    if (logo.startsWith('/')) {
-      const baseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:8000';
-      return `${baseUrl}${logo}`;
-    }
-    
-    // Sinon, supposer que c'est un chemin de stockage
-    const baseUrl = process.env.REACT_APP_API_URL?.replace('/api', '') || 'http://localhost:8000';
-    return `${baseUrl}/storage/${logo.replace(/^storage\//, '')}`;
-  }
-  
-  // Si c'est un objet, prendre l'URL ou le chemin
-  if (typeof logo === 'object') {
-    if (logo.url) return getImageUrl(logo.url);
-    if (logo.path) return getImageUrl(logo.path);
-  }
-  
-  return '';
-};
+// Fonction UTILISANT le service de formatage
+import { formatImageUrl } from '../../services/api/pharmacy.service';
 
 interface PharmacyCardProps {
   pharmacy: Pharmacy;
@@ -60,45 +33,65 @@ const PharmacyCard: React.FC<PharmacyCardProps> = ({
   onToggleActive,
 }) => {
   const formatHours = (opening: string, closing: string) => {
-    return `${opening.slice(0, 5)} - ${closing.slice(0, 5)}`;
-  };
-
-  const handleGetDirections = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((position) => {
-        const url = `https://www.google.com/maps/dir/?api=1&origin=${position.coords.latitude},${position.coords.longitude}&destination=${pharmacy.latitude},${pharmacy.longitude}`;
-        window.open(url, '_blank');
-      });
-    } else {
-      const url = `https://www.google.com/maps?q=${pharmacy.latitude},${pharmacy.longitude}`;
-      window.open(url, '_blank');
+    try {
+      const openTime = opening?.substring(0, 5) || '08:00';
+      const closeTime = closing?.substring(0, 5) || '20:00';
+      return `${openTime} - ${closeTime}`;
+    } catch {
+      return '08:00 - 20:00';
     }
   };
 
-  // Obtenir l'URL de l'image UNE FOIS
-  const logoUrl = getImageUrl(pharmacy.logo);
+  const handleGetDirections = () => {
+    if (pharmacy.latitude && pharmacy.longitude) {
+      const url = `https://www.google.com/maps/dir/?api=1&destination=${pharmacy.latitude},${pharmacy.longitude}`;
+      window.open(url, '_blank');
+    } else {
+      alert('Localisation non disponible pour cette pharmacie');
+    }
+  };
+
+  // Utiliser formatImageUrl du service pour obtenir l'URL du logo
+  const logoUrl = formatImageUrl(pharmacy.logo);
+  
+  console.log('Pharmacy Card - Logo URL:', {
+    original: pharmacy.logo,
+    formatted: logoUrl,
+    name: pharmacy.name
+  });
 
   return (
     <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
-      {/* En-tête avec image - SIMPLIFIÉ */}
+      {/* En-tête avec image */}
       <div className="h-48 relative bg-gradient-to-r from-blue-500 to-blue-700">
         {logoUrl ? (
-          <img
-            src={logoUrl}
-            alt={pharmacy.name}
-            className="h-full w-full object-cover"
-            loading="lazy"
-            onError={(e) => {
-              // En cas d'erreur, afficher l'icône à la place
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-        ) : null}
-        
-        {/* Icône de secours si pas d'image ou image échouée */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Building className="h-16 w-16 text-white opacity-80" />
-        </div>
+          <div className="h-full w-full">
+            <img
+              src={logoUrl}
+              alt={pharmacy.name}
+              className="h-full w-full object-cover"
+              loading="lazy"
+              onError={(e) => {
+                console.error('Failed to load logo:', logoUrl);
+                const img = e.target as HTMLImageElement;
+                img.style.display = 'none';
+                // Afficher l'icône de secours
+                const fallback = img.nextElementSibling as HTMLElement;
+                if (fallback) {
+                  fallback.style.display = 'flex';
+                }
+              }}
+            />
+            {/* Icône de secours masquée par défaut */}
+            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-r from-blue-500 to-blue-700" style={{ display: 'none' }}>
+              <Building className="h-16 w-16 text-white opacity-80" />
+            </div>
+          </div>
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Building className="h-16 w-16 text-white opacity-80" />
+          </div>
+        )}
         
         {/* Badges */}
         <div className="absolute top-3 left-3 space-y-1">
@@ -127,7 +120,7 @@ const PharmacyCard: React.FC<PharmacyCardProps> = ({
         </div>
       </div>
 
-      {/* Le reste du code reste inchangé... */}
+      {/* Contenu */}
       <div className="p-6">
         <div className="mb-4">
           <h3 className="text-xl font-bold text-gray-900 mb-2">{pharmacy.name}</h3>
@@ -188,6 +181,7 @@ const PharmacyCard: React.FC<PharmacyCardProps> = ({
             <button
               onClick={handleGetDirections}
               className="px-4 py-2 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 flex items-center justify-center"
+              disabled={!pharmacy.latitude || !pharmacy.longitude}
             >
               <Navigation className="h-4 w-4 mr-1" />
               Itinéraire

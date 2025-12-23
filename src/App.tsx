@@ -31,12 +31,14 @@ import AdminDashboard from './pages/dashboard/admin/AdminDashboard';
 import UsersManagement from './pages/dashboard/admin/UsersManagement';
 import PharmaciesManagement from './pages/dashboard/admin/PharmaciesManagement';
 import StatisticsPage from './pages/dashboard/admin/StatisticsPage';
+import AdminProfilePage from './pages/dashboard/admin/AdminProfilePage';
 
 // Pages dashboard - Pharmacien
 import PharmacienDashboard from './pages/dashboard/pharmacien/PharmacienDashboard';
 import MedicamentsManagement from './pages/dashboard/pharmacien/MedicamentsManagement';
 import CommandesManagement from './pages/dashboard/pharmacien/CommandesManagement';
 import PharmacySettings from './pages/dashboard/pharmacien/PharmacySettings';
+import PharmacienProfilePage from './pages/dashboard/pharmacien/PharmacienProfilePage';
 
 // Pages dashboard - Client
 import ClientDashboard from './pages/dashboard/client/ClientDashboard';
@@ -48,6 +50,7 @@ import ProfilePage from './pages/dashboard/client/ProfilePage';
 import LivreurDashboard from './pages/dashboard/livreur/LivreurDashboard';
 import LivraisonsPage from './pages/dashboard/livreur/LivraisonsPage';
 import MapTrackingPage from './pages/dashboard/livreur/MapTrackingPage';
+import LivreurProfilePage from './pages/dashboard/livreur/LivreurProfilePage';
 
 // Components
 import ProtectedRoute from './components/shared/ProtectedRoute';
@@ -151,6 +154,14 @@ const App: React.FC = () => {
                         </DashboardLayout>
                       </ProtectedRoute>
                     } />
+
+                    <Route path="profile" element={
+                      <ProtectedRoute requiredRole="admin">
+                        <DashboardLayout role="admin">
+                          <AdminProfilePage />
+                        </DashboardLayout>
+                      </ProtectedRoute>
+                    } />
                   </Route>
 
                   {/* Routes protégées - Pharmacien */}
@@ -199,6 +210,14 @@ const App: React.FC = () => {
                       <ProtectedRoute requiredRole="pharmacien">
                         <DashboardLayout role="pharmacien">
                           <CreatePharmacyPage />
+                        </DashboardLayout>
+                      </ProtectedRoute>
+                    } />
+
+                    <Route path="profile" element={
+                      <ProtectedRoute requiredRole="pharmacien">
+                        <DashboardLayout role="pharmacien">
+                          <PharmacienProfilePage />
                         </DashboardLayout>
                       </ProtectedRoute>
                     } />
@@ -261,6 +280,14 @@ const App: React.FC = () => {
                       <ProtectedRoute requiredRole="livreur">
                         <DashboardLayout role="livreur">
                           <MapTrackingPage />
+                        </DashboardLayout>
+                      </ProtectedRoute>
+                    } />
+
+                    <Route path="profile" element={
+                      <ProtectedRoute requiredRole="livreur">
+                        <DashboardLayout role="livreur">
+                          <LivreurProfilePage />
                         </DashboardLayout>
                       </ProtectedRoute>
                     } />

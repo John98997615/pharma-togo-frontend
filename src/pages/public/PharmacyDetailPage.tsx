@@ -1,12 +1,14 @@
 // src/pages/public/PharmacyDetailPage.tsx
 import React, { useState, useMemo } from 'react';
+import ImageWithFallback from '../../components/shared/ImageWithFallback';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
 import {
   MapPin, Phone, Mail, Clock, Star, Heart,
   Navigation, Share2, Package, Users, Award,
-  ShoppingCart, Search
+  ShoppingCart, Search,
+  Building2
 } from 'lucide-react';
 import { GoogleMap, Marker } from '@react-google-maps/api';
 import { useJsApiLoader } from '@react-google-maps/api';
@@ -85,7 +87,7 @@ const PharmacyDetailPage: React.FC = () => {
       const matchesSearch = filters.search === '' ||
         medicament.name.toLowerCase().includes(filters.search.toLowerCase()) ||
         medicament.description?.toLowerCase().includes(filters.search.toLowerCase());
-      
+
       return matchesSearch;
     });
   }, [medicamentsArray, filters.search]);
@@ -93,7 +95,7 @@ const PharmacyDetailPage: React.FC = () => {
   // Trier les médicaments
   const sortedAndFilteredMedicaments = useMemo(() => {
     const sorted = [...filteredMedicaments];
-    
+
     switch (filters.sortBy) {
       case 'price_asc':
         return sorted.sort((a, b) => a.price - b.price);
@@ -157,27 +159,28 @@ const PharmacyDetailPage: React.FC = () => {
             <div className="bg-white rounded-xl shadow p-6">
               <div className="flex flex-col items-center text-center">
                 {pharmacy.logo ? (
-                  <img
+                  <ImageWithFallback
                     src={pharmacy.logo}
                     alt={pharmacy.name}
                     className="h-32 w-32 rounded-full object-cover mb-4"
+                    fallbackIcon={<Building2 className="h-20 w-20 text-blue-600" />}
+                    fallbackBg="bg-blue-100"
                   />
                 ) : (
                   <div className="h-32 w-32 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-                    <MapPin className="h-16 w-16 text-blue-600" />
+                    <Building2 className="h-20 w-20 text-blue-600" />
                   </div>
                 )}
-                
+
                 <h1 className="text-2xl font-bold mb-2">{pharmacy.name}</h1>
-                
+
                 <div className="flex items-center mb-4">
                   <div className="flex">
                     {[...Array(5)].map((_, i) => (
                       <Star
                         key={i}
-                        className={`h-5 w-5 ${
-                          i < Math.floor(stats.rating) ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'
-                        }`}
+                        className={`h-5 w-5 ${i < Math.floor(stats.rating) ? 'text-yellow-500 fill-yellow-500' : 'text-gray-300'
+                          }`}
                       />
                     ))}
                   </div>
@@ -185,42 +188,41 @@ const PharmacyDetailPage: React.FC = () => {
                     {stats.rating} ({stats.reviews} avis)
                   </span>
                 </div>
-                
+
                 {pharmacy.is_garde && (
                   <div className="mb-4 px-4 py-2 bg-red-100 text-red-800 rounded-full font-bold">
                     🚨 PHARMACIE DE GARDE
                   </div>
                 )}
-                
-                <div className={`px-3 py-1 rounded-full text-sm mb-6 ${
-                  pharmacy.is_active 
-                    ? 'bg-green-100 text-green-800' 
+
+                <div className={`px-3 py-1 rounded-full text-sm mb-6 ${pharmacy.is_active
+                    ? 'bg-green-100 text-green-800'
                     : 'bg-red-100 text-red-800'
-                }`}>
+                  }`}>
                   {pharmacy.is_active ? '✅ Ouverte' : '❌ Fermée'}
                 </div>
-                
+
                 {/* Informations de contact */}
                 <div className="space-y-3 w-full">
                   <div className="flex items-center">
                     <MapPin className="h-5 w-5 text-gray-400 mr-3" />
                     <span className="text-gray-700">{pharmacy.address}</span>
                   </div>
-                  
+
                   <div className="flex items-center">
                     <Phone className="h-5 w-5 text-gray-400 mr-3" />
-                    <a 
+                    <a
                       href={`tel:${pharmacy.phone}`}
                       className="text-blue-600 hover:text-blue-800"
                     >
                       {pharmacy.phone}
                     </a>
                   </div>
-                  
+
                   {pharmacy.email && (
                     <div className="flex items-center">
                       <Mail className="h-5 w-5 text-gray-400 mr-3" />
-                      <a 
+                      <a
                         href={`mailto:${pharmacy.email}`}
                         className="text-blue-600 hover:text-blue-800"
                       >
@@ -228,7 +230,7 @@ const PharmacyDetailPage: React.FC = () => {
                       </a>
                     </div>
                   )}
-                  
+
                   <div className="flex items-center">
                     <Clock className="h-5 w-5 text-gray-400 mr-3" />
                     <span className="text-gray-700">
@@ -236,7 +238,7 @@ const PharmacyDetailPage: React.FC = () => {
                     </span>
                   </div>
                 </div>
-                
+
                 {/* Actions */}
                 <div className="mt-6 space-y-3 w-full">
                   <button
@@ -246,7 +248,7 @@ const PharmacyDetailPage: React.FC = () => {
                     <Navigation className="h-5 w-5 mr-2" />
                     Itinéraire
                   </button>
-                  
+
                   <button
                     onClick={handleShare}
                     className="w-full py-3 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 flex items-center justify-center"
@@ -254,7 +256,7 @@ const PharmacyDetailPage: React.FC = () => {
                     <Share2 className="h-5 w-5 mr-2" />
                     Partager
                   </button>
-                  
+
                   <button className="w-full py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 flex items-center justify-center">
                     <Heart className="h-5 w-5 mr-2" />
                     Ajouter aux favoris
@@ -262,30 +264,30 @@ const PharmacyDetailPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Statistiques */}
             <div className="bg-white rounded-xl shadow p-6 mt-6">
               <h3 className="font-bold mb-4 flex items-center">
                 <Award className="h-5 w-5 mr-2" />
                 Statistiques
               </h3>
-              
+
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Médicaments total</span>
                   <span className="font-bold">{stats.totalMedicaments}</span>
                 </div>
-                
+
                 <div className="flex justify-between">
                   <span className="text-gray-600">Disponibles</span>
                   <span className="font-bold text-green-600">{stats.availableMedicaments}</span>
                 </div>
-                
+
                 <div className="flex justify-between">
                   <span className="text-gray-600">Note moyenne</span>
                   <span className="font-bold">{stats.rating}/5</span>
                 </div>
-                
+
                 <div className="flex justify-between">
                   <span className="text-gray-600">Années d'activité</span>
                   <span className="font-bold">{stats.yearsActive} ans</span>
@@ -293,7 +295,7 @@ const PharmacyDetailPage: React.FC = () => {
               </div>
             </div>
           </div>
-          
+
           {/* Contenu principal */}
           <div className="md:w-2/3">
             {/* Description */}
@@ -302,26 +304,26 @@ const PharmacyDetailPage: React.FC = () => {
               <p className="text-gray-700 mb-4">
                 {pharmacy.description || 'Aucune description disponible pour cette pharmacie.'}
               </p>
-              
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center p-4 bg-blue-50 rounded-lg">
                   <Package className="h-8 w-8 text-blue-600 mx-auto mb-2" />
                   <p className="font-bold">{stats.totalMedicaments}</p>
                   <p className="text-sm text-gray-600">Produits</p>
                 </div>
-                
+
                 <div className="text-center p-4 bg-green-50 rounded-lg">
                   <Users className="h-8 w-8 text-green-600 mx-auto mb-2" />
                   <p className="font-bold">Expert</p>
                   <p className="text-sm text-gray-600">Personnel</p>
                 </div>
-                
+
                 <div className="text-center p-4 bg-purple-50 rounded-lg">
                   <Clock className="h-8 w-8 text-purple-600 mx-auto mb-2" />
                   <p className="font-bold">{stats.yearsActive}+</p>
                   <p className="text-sm text-gray-600">Ans expérience</p>
                 </div>
-                
+
                 <div className="text-center p-4 bg-yellow-50 rounded-lg">
                   <Award className="h-8 w-8 text-yellow-600 mx-auto mb-2" />
                   <p className="font-bold">Certifié</p>
@@ -329,7 +331,7 @@ const PharmacyDetailPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Carte */}
             <div className="bg-white rounded-xl shadow p-6 mb-6">
               <h2 className="text-xl font-bold mb-4">Localisation</h2>
@@ -350,7 +352,7 @@ const PharmacyDetailPage: React.FC = () => {
                 </div>
               )}
             </div>
-            
+
             {/* Onglets */}
             <div className="bg-white rounded-xl shadow">
               {/* Navigation des onglets */}
@@ -358,41 +360,38 @@ const PharmacyDetailPage: React.FC = () => {
                 <div className="flex overflow-x-auto">
                   <button
                     onClick={() => setActiveTab('medicaments')}
-                    className={`px-6 py-4 font-medium whitespace-nowrap ${
-                      activeTab === 'medicaments'
+                    className={`px-6 py-4 font-medium whitespace-nowrap ${activeTab === 'medicaments'
                         ? 'border-b-2 border-blue-600 text-blue-600'
                         : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     <Package className="inline h-5 w-5 mr-2" />
                     Médicaments ({stats.totalMedicaments})
                   </button>
-                  
+
                   <button
                     onClick={() => setActiveTab('reviews')}
-                    className={`px-6 py-4 font-medium whitespace-nowrap ${
-                      activeTab === 'reviews'
+                    className={`px-6 py-4 font-medium whitespace-nowrap ${activeTab === 'reviews'
                         ? 'border-b-2 border-blue-600 text-blue-600'
                         : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     <Star className="inline h-5 w-5 mr-2" />
                     Avis ({stats.reviews})
                   </button>
-                  
+
                   <button
                     onClick={() => setActiveTab('info')}
-                    className={`px-6 py-4 font-medium whitespace-nowrap ${
-                      activeTab === 'info'
+                    className={`px-6 py-4 font-medium whitespace-nowrap ${activeTab === 'info'
                         ? 'border-b-2 border-blue-600 text-blue-600'
                         : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     Informations
                   </button>
                 </div>
               </div>
-              
+
               {/* Contenu des onglets */}
               <div className="p-6">
                 {activeTab === 'medicaments' && (
@@ -408,16 +407,16 @@ const PharmacyDetailPage: React.FC = () => {
                               placeholder="Rechercher un médicament..."
                               className="pl-10 w-full px-3 py-2 border border-gray-300 rounded-lg"
                               value={filters.search}
-                              onChange={(e) => setFilters({...filters, search: e.target.value})}
+                              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                             />
                           </div>
                         </div>
-                        
+
                         <div>
                           <select
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                             value={filters.sortBy}
-                            onChange={(e) => setFilters({...filters, sortBy: e.target.value})}
+                            onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
                           >
                             <option value="popular">Les plus populaires</option>
                             <option value="price_asc">Prix croissant</option>
@@ -428,7 +427,7 @@ const PharmacyDetailPage: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Liste des médicaments */}
                     {medicamentsLoading ? (
                       <div className="text-center py-12">
@@ -455,32 +454,30 @@ const PharmacyDetailPage: React.FC = () => {
                                 </span>
                               )}
                             </div>
-                            
+
                             <p className="text-sm text-gray-600 mb-3 line-clamp-2">
                               {medicament.description || 'Pas de description'}
                             </p>
-                            
+
                             <div className="flex items-center justify-between mb-3">
                               <span className="text-lg font-bold text-green-600">
                                 {medicament.price.toLocaleString()} FCFA
                               </span>
-                              <span className={`text-sm px-2 py-1 rounded-full ${
-                                medicament.quantity > 10 ? 'bg-green-100 text-green-800' :
-                                medicament.quantity > 0 ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>
+                              <span className={`text-sm px-2 py-1 rounded-full ${medicament.quantity > 10 ? 'bg-green-100 text-green-800' :
+                                  medicament.quantity > 0 ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-red-100 text-red-800'
+                                }`}>
                                 {medicament.quantity > 0 ? 'En stock' : 'Rupture'}
                               </span>
                             </div>
-                            
+
                             <button
                               onClick={() => handleAddToCart(medicament)}
                               disabled={medicament.quantity === 0}
-                              className={`w-full py-2 rounded-lg font-medium ${
-                                medicament.quantity === 0
+                              className={`w-full py-2 rounded-lg font-medium ${medicament.quantity === 0
                                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                   : 'bg-blue-600 text-white hover:bg-blue-700'
-                              }`}
+                                }`}
                             >
                               <ShoppingCart className="inline h-4 w-4 mr-2" />
                               Ajouter au panier
@@ -491,7 +488,7 @@ const PharmacyDetailPage: React.FC = () => {
                     )}
                   </div>
                 )}
-                
+
                 {activeTab === 'reviews' && (
                   <div className="text-center py-12">
                     <Star className="h-16 w-16 mx-auto text-gray-300 mb-4" />
@@ -499,7 +496,7 @@ const PharmacyDetailPage: React.FC = () => {
                     <p className="text-sm text-gray-400">Soyez le premier à noter cette pharmacie</p>
                   </div>
                 )}
-                
+
                 {activeTab === 'info' && (
                   <div className="space-y-4">
                     <div>
@@ -512,7 +509,7 @@ const PharmacyDetailPage: React.FC = () => {
                         <li>Service de garde {pharmacy.is_garde ? '(actif)' : '(non actif)'}</li>
                       </ul>
                     </div>
-                    
+
                     <div>
                       <h3 className="font-bold mb-2">Moyens de paiement</h3>
                       <div className="flex flex-wrap gap-2">
@@ -521,7 +518,7 @@ const PharmacyDetailPage: React.FC = () => {
                         <span className="px-3 py-1 bg-gray-100 text-gray-800 rounded-full text-sm">Carte bancaire</span>
                       </div>
                     </div>
-                    
+
                     <div>
                       <h3 className="font-bold mb-2">Accessibilité</h3>
                       <p className="text-gray-600">
