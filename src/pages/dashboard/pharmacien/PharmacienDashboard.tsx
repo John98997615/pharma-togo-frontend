@@ -423,7 +423,7 @@ const PharmacienDashboard: React.FC = () => {
         </div>
       </motion.div>
 
-      {/* Message de succès */}
+      {/* Message de succès
       <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4">
         <div className="flex items-center">
           <Store className="h-5 w-5 text-green-600 mr-3" />
@@ -436,7 +436,7 @@ const PharmacienDashboard: React.FC = () => {
             </p>
           </div>
         </div>
-      </div>
+      </div> */}
 
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

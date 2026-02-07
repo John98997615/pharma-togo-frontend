@@ -194,7 +194,7 @@ const LoginPage: React.FC = () => {
 
         {/* Informations */}
         <div className="mt-8 text-center text-sm text-gray-600">
-          <p>© {new Date().getFullYear()} PharmaTogo. Projet de certification SIMPLON Togo.</p>
+          <p>© {new Date().getFullYear()} PharmaTogo. Projet de gestion communautaire des pharmacies locales.</p>
         </div>
       </div>
     </div>

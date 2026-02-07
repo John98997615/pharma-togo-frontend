@@ -72,7 +72,7 @@ const ForgotPasswordPage: React.FC = () => {
         {/* Informations */}
         <div className="mt-8 text-center text-sm text-gray-600">
           <p>Si vous ne recevez pas l'email, vérifiez votre dossier spam ou contactez le support.</p>
-          <p className="mt-2">© {new Date().getFullYear()} PharmaTogo. Projet de certification SIMPLON Togo.</p>
+          <p className="mt-2">© {new Date().getFullYear()} PharmaTogo. Projet de gestion communautaire des pharmacies locales.</p>
         </div>
       </div>
     </div>

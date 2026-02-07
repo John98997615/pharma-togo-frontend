@@ -6,19 +6,47 @@ import { Pharmacy } from '../../types/pharmacy.types';
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 /**
- * Fonction UNIVERSELLE pour formater n'importe quelle URL d'image
- * Gère tous les formats retournés par Laravel
+ * FONCTION CRITIQUE : Nettoie les chemins Windows problématiques
+ * Transforme C:\xampp\tmp\php2740.tmp → http://localhost:8000/storage/php2740.tmp
  */
 export const formatImageUrl = (imageData: any): string => {
   // Si vide/null
   if (!imageData) return '';
   
-  // Débuggage
-  console.log('Image data to format:', imageData);
+  console.log('🖼️ Image data to format:', imageData);
   
   // Cas 1: Déjà une URL complète (http, https, blob, data)
   if (typeof imageData === 'string') {
     const str = imageData.trim();
+    
+    // ⚠️ CRITIQUE : Détecter et corriger les chemins Windows
+    if (str.includes('\\') || str.includes('C:\\') || str.includes('C:/') || str.includes('xampp')) {
+      console.warn('⚠️ Windows path detected, cleaning:', str);
+      
+      // Extraire le nom de fichier du chemin Windows
+      let filename = '';
+      
+      // Chercher après le dernier backslash ou slash
+      const backslashIndex = str.lastIndexOf('\\');
+      const slashIndex = str.lastIndexOf('/');
+      const lastSeparator = Math.max(backslashIndex, slashIndex);
+      
+      if (lastSeparator !== -1) {
+        filename = str.substring(lastSeparator + 1);
+      } else {
+        filename = str;
+      }
+      
+      // Nettoyer le nom de fichier
+      filename = filename.replace(/[^\w\d.-]/g, '_');
+      
+      console.log('📄 Extracted filename:', filename);
+      
+      // Retourner l'URL publique correcte
+      const publicUrl = `${API_BASE_URL}/storage/${filename}`;
+      console.log('✅ Converted to public URL:', publicUrl);
+      return publicUrl;
+    }
     
     // URL complète
     if (str.startsWith('http://') || str.startsWith('https://')) {
@@ -32,6 +60,11 @@ export const formatImageUrl = (imageData: any): string => {
     
     // Chemin absolu (/storage/...)
     if (str.startsWith('/')) {
+      // Éviter les doublons d'URL
+      if (str.startsWith('/api/')) {
+        const cleanPath = str.replace('/api/', '/');
+        return `${API_BASE_URL}${cleanPath}`;
+      }
       return `${API_BASE_URL}${str}`;
     }
     
@@ -66,12 +99,14 @@ export const formatImageUrl = (imageData: any): string => {
       return formatImageUrl(imageData.filename);
     }
     
-    // Si c'est un objet mais pas de propriété reconnue, on essaye de le traiter comme une string
-    try {
-      const str = JSON.stringify(imageData);
-      return formatImageUrl(str);
-    } catch {
-      return '';
+    // Chercher dans toutes les propriétés string
+    for (const key in imageData) {
+      if (typeof imageData[key] === 'string') {
+        const result = formatImageUrl(imageData[key]);
+        if (result && !result.includes('C:\\')) {
+          return result;
+        }
+      }
     }
   }
   
@@ -100,6 +135,16 @@ const formatPharmacyData = (data: any): Pharmacy => {
     };
   }
 
+  // Formater l'URL du logo AVANT de créer l'objet
+  const logoUrl = formatImageUrl(data.logo);
+  
+  console.log('🏥 Formatting pharmacy data:', {
+    id: data.id,
+    name: data.name,
+    originalLogo: data.logo,
+    formattedLogo: logoUrl
+  });
+
   return {
     id: Number(data.id) || 0,
     name: String(data.name || ''),
@@ -109,7 +154,7 @@ const formatPharmacyData = (data: any): Pharmacy => {
     longitude: parseFloat(data.longitude) || 0,
     phone: String(data.phone || ''),
     email: data.email ? String(data.email) : undefined,
-    logo: formatImageUrl(data.logo), // ICI on utilise la fonction formatImageUrl
+    logo: logoUrl, // Utiliser l'URL formatée
     is_garde: Boolean(data.is_garde),
     opening_time: String(data.opening_time || '08:00'),
     closing_time: String(data.closing_time || '20:00'),
@@ -143,7 +188,11 @@ export const pharmacyService = {
       console.log('📡 Fetching pharmacies with params:', params);
       
       const response = await axiosClient.get('/pharmacies', { params });
-      console.log('📦 Pharmacies API response:', response.data);
+      console.log('📦 Pharmacies API response structure:', {
+        isArray: Array.isArray(response.data),
+        hasData: 'data' in response.data,
+        keys: Object.keys(response.data)
+      });
 
       // Extraire le tableau de pharmacies de la réponse
       let pharmaciesArray: any[] = [];
@@ -159,26 +208,42 @@ export const pharmacyService = {
         else if ('pharmacies' in response.data && Array.isArray(response.data.pharmacies)) {
           pharmaciesArray = response.data.pharmacies;
         }
-        // Format direct avec propriétés de pagination
+        // Format direct
         else if ('data' in response.data && response.data.data) {
-          // Peut être un objet avec une propriété data qui est un tableau
           const data = response.data.data;
           if (Array.isArray(data)) {
             pharmaciesArray = data;
+          }
+        }
+        // Essayer de trouver un tableau dans l'objet
+        else {
+          for (const key in response.data) {
+            if (Array.isArray(response.data[key])) {
+              pharmaciesArray = response.data[key];
+              break;
+            }
           }
         }
       }
 
       console.log(`✅ Found ${pharmaciesArray.length} pharmacies`);
       
-      // Formater chaque pharmacie
+      // Formater chaque pharmacie avec logs détaillés
       const formattedPharmacies = pharmaciesArray.map((pharmacy, index) => {
+        console.log(`🔍 Pharmacy ${index + 1} raw data:`, {
+          name: pharmacy.name,
+          logoRaw: pharmacy.logo,
+          logoType: typeof pharmacy.logo
+        });
+        
         const formatted = formatPharmacyData(pharmacy);
-        console.log(`🏥 Pharmacy ${index + 1}:`, {
+        
+        console.log(`✅ Pharmacy ${index + 1} formatted:`, {
           name: formatted.name,
           logo: formatted.logo,
-          logoRaw: pharmacy.logo
+          logoValid: formatted.logo && !formatted.logo.includes('C:\\')
         });
+        
         return formatted;
       });
 
@@ -219,7 +284,8 @@ export const pharmacyService = {
       console.log('✅ Formatted pharmacy:', {
         name: formattedPharmacy.name,
         logo: formattedPharmacy.logo,
-        logoRaw: pharmacyData.logo
+        logoRaw: pharmacyData.logo,
+        isWindowsPath: formattedPharmacy.logo?.includes('C:\\')
       });
       
       return formattedPharmacy;
@@ -294,7 +360,6 @@ export const pharmacyService = {
 
   /**
    * Mettre à jour une pharmacie
-   * IMPORTANT: Utilise POST avec _method=PUT pour les FormData
    */
   update: async (id: number, data: FormData | Partial<Pharmacy>): Promise<Pharmacy> => {
     try {
@@ -306,7 +371,6 @@ export const pharmacyService = {
         // FormData: utiliser POST avec _method=PUT
         const formData = data as FormData;
         
-        // Ajouter _method=PUT si pas déjà présent
         if (!formData.has('_method')) {
           formData.append('_method', 'PUT');
         }
@@ -361,7 +425,6 @@ export const pharmacyService = {
         status: error.response?.status
       });
       
-      // Gestion des erreurs de validation Laravel
       if (error.response?.data?.errors) {
         const validationErrors = Object.entries(error.response.data.errors)
           .map(([field, messages]) => `${field}: ${(messages as string[]).join(', ')}`)

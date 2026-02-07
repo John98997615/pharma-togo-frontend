@@ -28,9 +28,6 @@ const AuthLayout: React.FC = () => {
 
         {/* Footer */}
         <div className="mt-8 text-center">
-          <p className="text-sm text-gray-600">
-            © {new Date().getFullYear()} PharmaTogo. Projet de certification SIMPLON Togo.
-          </p>
           <div className="mt-4 space-x-4">
             <Link to="/" className="text-sm text-gray-600 hover:text-gray-900">
               Accueil

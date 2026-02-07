@@ -1,7 +1,7 @@
 // src/components/shared/Footer.tsx
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, Mail, MapPin, Facebook, Twitter, Instagram } from 'lucide-react';
+import { Phone, Mail, MapPin, Facebook, Twitter, Instagram, MessageCircle, MessagesSquare } from 'lucide-react';
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -19,7 +19,7 @@ const Footer: React.FC = () => {
               <span className="text-xl font-bold">PharmaTogo</span>
             </div>
             <p className="text-gray-400 text-sm">
-              Votre plateforme de gestion de pharmacies au Togo. 
+              Votre plateforme de gestion de pharmacies au Togo.
               Commandez vos médicaments en ligne, trouvez les pharmacies de garde.
             </p>
           </div>
@@ -57,11 +57,11 @@ const Footer: React.FC = () => {
             <ul className="space-y-3">
               <li className="flex items-center space-x-3">
                 <Phone className="h-5 w-5 text-blue-400" />
-                <span className="text-gray-400">+228 70 12 34 56</span>
+                <span className="text-gray-400">+228 98 99 76 15</span>
               </li>
               <li className="flex items-center space-x-3">
                 <Mail className="h-5 w-5 text-blue-400" />
-                <span className="text-gray-400">contact@pharmatogo.tg</span>
+                <span className="text-gray-400">komivijohnayite99@gmail.com</span>
               </li>
               <li className="flex items-center space-x-3">
                 <MapPin className="h-5 w-5 text-blue-400" />
@@ -92,6 +92,16 @@ const Footer: React.FC = () => {
               >
                 <Instagram className="h-5 w-5" />
               </a>
+              <a
+                href="https://wa.me/22898997615?text=Bonjour,%20j'ai%20une%20question%20sur%20PharmaTogo"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="h-10 w-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-green-600 transition-colors"
+                aria-label="WhatsApp"
+                title="Contactez-nous sur WhatsApp"
+              >
+                <MessageCircle className="h-5 w-5" />
+              </a>
             </div>
           </div>
         </div>
@@ -99,7 +109,7 @@ const Footer: React.FC = () => {
         {/* Copyright */}
         <div className="mt-8 pt-8 border-t border-gray-800 text-center text-gray-400 text-sm">
           <p>&copy; {currentYear} PharmaTogo. Tous droits réservés.</p>
-          <p className="mt-2">Projet de certification SIMPLON Togo</p>
+          {/* <p className="mt-2">Projet de certification SIMPLON Togo</p> */}
         </div>
       </div>
     </footer>
