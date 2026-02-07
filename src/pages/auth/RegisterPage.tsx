@@ -19,17 +19,17 @@ const RegisterPage: React.FC = () => {
   const handleSubmit = async (data: RegisterDataWithPhoto) => {
     try {
       setError('');
-      
+
       // Pas besoin de convertir, la photo est déjà un File | null
       await register(data);
-      
+
       toast.success('Inscription réussie ! Bienvenue sur PharmaTogo');
-      
+
       // Redirection basée sur le rôle
       const userStr = localStorage.getItem('user');
       if (userStr) {
         const user = JSON.parse(userStr);
-        
+
         switch (user.role) {
           case 'admin':
             navigate('/admin/dashboard');
@@ -58,27 +58,40 @@ const RegisterPage: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-gray-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="w-full max-w-6xl"> {/* Largeur augmentée */}
+      <div className="max-w-md w-full"> {/* Même largeur que la page de connexion */}
         {/* Carte d'inscription */}
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden w-full">
           {/* En-tête */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-8 text-center text-white">
-            <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-white/20 mb-4">
-              <Pill className="h-8 w-8" />
-            </div>
-            <h2 className="text-2xl font-bold">Rejoindre PharmaTogo</h2>
-            <p className="text-blue-100 mt-2">Votre santé, notre priorité</p>
+
+            {/* Lien sur l'icône */}
+            <Link to="/" className="inline-block hover:opacity-90 transition-opacity">
+              <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-white/20 mb-4 hover:bg-white/30 transition-colors">
+                <Pill className="h-8 w-8" />
+              </div>
+            </Link>
+
+            {/* Lien sur le titre */}
+            <Link to="/" className="hover:opacity-90 transition-opacity inline-block">
+              <h2 className="text-2xl font-bold">Rejoindre PharmaTogo</h2>
+            </Link>
+
+            {/* Lien sur le slogan */}
+            <Link to="/" className="hover:opacity-90 transition-opacity inline-block">
+              <p className="text-blue-100 mt-2">Votre santé, notre priorité</p>
+            </Link>
+
           </div>
-          
+
           {/* Formulaire */}
           <div className="p-8">
-            <div className="mb-8">
+            <div className="mb-8 text-center">
               <h3 className="text-xl font-semibold text-gray-900 mb-2">Créer un compte</h3>
               <p className="text-gray-600">
                 Remplissez le formulaire pour créer votre compte et accéder à tous nos services
               </p>
             </div>
-            
+
             {/* Message de sécurité */}
             <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
               <div className="flex items-center">
@@ -91,15 +104,15 @@ const RegisterPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            
-            <RegisterForm 
-              onSubmit={handleSubmit} 
+
+            <RegisterForm
+              onSubmit={handleSubmit}
               isLoading={isLoading}
               error={error}
             />
-            
+
             {/* Séparateur */}
-            <div className="mt-10 pt-8 border-t border-gray-200">
+            <div className="relative my-6">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-gray-300"></div>
@@ -141,7 +154,6 @@ const RegisterPage: React.FC = () => {
             <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
             <span>Tous droits réservés</span>
             <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
-            <span>Projet certifié SIMPLON</span>
           </div>
           <p className="text-xs text-gray-400 mt-2">
             Plateforme de gestion communautaire des pharmacies locales au Togo

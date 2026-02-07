@@ -19,9 +19,9 @@ const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
-  
+
   const from = (location.state as any)?.from?.pathname || '/';
-  
+
   const {
     register,
     handleSubmit,
@@ -34,11 +34,11 @@ const LoginPage: React.FC = () => {
     try {
       await login(data.email, data.password);
       toast.success('Connexion réussie !');
-      
+
       // Redirection vers la page précédente ou dashboard selon le rôle
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       let redirectPath = from;
-      
+
       // Si l'utilisateur vient de la page d'accueil, rediriger vers son dashboard
       if (from === '/') {
         switch (user.role) {
@@ -58,7 +58,7 @@ const LoginPage: React.FC = () => {
             redirectPath = '/';
         }
       }
-      
+
       navigate(redirectPath, { replace: true });
     } catch (error: any) {
       const message = error.response?.data?.message || 'Email ou mot de passe incorrect';
@@ -73,13 +73,21 @@ const LoginPage: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
           {/* En-tête */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-8 text-center text-white">
-            <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-white/20 mb-4">
-              <Pill className="h-8 w-8" />
-            </div>
-            <h2 className="text-2xl font-bold">Connexion à PharmaTogo</h2>
-            <p className="text-blue-100 mt-2">Accédez à votre compte</p>
+            <Link to="/" className="inline-block hover:opacity-90 transition-opacity">
+              <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-white/20 mb-4">
+                <Pill className="h-8 w-8" />
+              </div>
+            </Link>
+
+            <Link to="/" className="hover:opacity-90 transition-opacity inline-block">
+              <h2 className="text-2xl font-bold">Connexion à PharmaTogo</h2>
+            </Link>
+
+            <Link to="/" className="hover:opacity-90 transition-opacity inline-block">
+              <p className="text-blue-100 mt-2">Accédez à votre compte</p>
+            </Link>
           </div>
-          
+
           {/* Formulaire */}
           <div className="p-8">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -91,16 +99,15 @@ const LoginPage: React.FC = () => {
                 <input
                   {...register('email')}
                   type="email"
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.email ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.email ? 'border-red-500' : 'border-gray-300'
+                    }`}
                   placeholder="votre@email.com"
                 />
                 {errors.email && (
                   <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
                 )}
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <Lock className="inline h-4 w-4 mr-1" />
@@ -109,9 +116,8 @@ const LoginPage: React.FC = () => {
                 <input
                   {...register('password')}
                   type="password"
-                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.password ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.password ? 'border-red-500' : 'border-gray-300'
+                    }`}
                   placeholder="Votre mot de passe"
                 />
                 {errors.password && (
@@ -131,7 +137,7 @@ const LoginPage: React.FC = () => {
                     Se souvenir de moi
                   </label>
                 </div>
-                
+
                 <Link
                   to="/forgot-password"
                   className="text-sm text-blue-600 hover:text-blue-500"

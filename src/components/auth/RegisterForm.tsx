@@ -197,7 +197,6 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error 
               <option value="client">Client</option>
               <option value="pharmacien">Pharmacien</option>
               <option value="livreur">Livreur</option>
-              <option value="admin">Administrateur</option>
             </select>
             {errors.role && (
               <p className="mt-1 text-sm text-red-600">{errors.role.message}</p>
@@ -317,7 +316,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSubmit, isLoading, error 
               </div>
               <div className="ml-3">
                 <p className="text-sm text-gray-600">
-                  Nous respectons votre vie privée. Vos données sont protégées conformément à la loi togolaise sur la protection des données et au RGPD.
+                  Nous respectons votre vie privée et vos données sont protégées.
                 </p>
               </div>
             </div>
