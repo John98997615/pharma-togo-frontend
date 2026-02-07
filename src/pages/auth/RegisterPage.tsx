@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import RegisterForm, { RegisterFormData } from '../../components/auth/RegisterForm';
+import { Pill, Shield } from 'lucide-react';
 
 // Définir le type pour les données avec photo
 interface RegisterDataWithPhoto extends RegisterFormData {
@@ -57,54 +58,93 @@ const RegisterPage: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-gray-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-2xl w-full space-y-8">
-        <div className="text-center">
-          <div className="mx-auto h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-            <span className="text-blue-600 text-xl font-bold">PT</span>
-          </div>
-          <h2 className="text-3xl font-bold text-gray-900">
-            PharmaTogo
-          </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Rejoignez la première plateforme de gestion des pharmacies au Togo
-          </p>
-        </div>
-        
-        <div className="bg-white py-8 px-6 shadow-xl rounded-xl sm:px-10 border border-gray-100">
-          <div className="mb-6">
-            <h3 className="text-xl font-semibold text-gray-800">Créer un compte</h3>
-            <p className="mt-1 text-sm text-gray-600">
-              Remplissez le formulaire pour créer votre compte
-            </p>
+      <div className="w-full max-w-6xl"> {/* Largeur augmentée */}
+        {/* Carte d'inscription */}
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden w-full">
+          {/* En-tête */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-8 text-center text-white">
+            <div className="inline-flex items-center justify-center h-16 w-16 rounded-full bg-white/20 mb-4">
+              <Pill className="h-8 w-8" />
+            </div>
+            <h2 className="text-2xl font-bold">Rejoindre PharmaTogo</h2>
+            <p className="text-blue-100 mt-2">Votre santé, notre priorité</p>
           </div>
           
-          <RegisterForm 
-            onSubmit={handleSubmit} 
-            isLoading={isLoading}
-            error={error}
-          />
-          
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <div className="text-center">
-              <p className="text-sm text-gray-600">
-                Déjà un compte ?{' '}
-                <Link 
-                  to="/login" 
-                  className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
-                >
-                  Se connecter
-                </Link>
+          {/* Formulaire */}
+          <div className="p-8">
+            <div className="mb-8">
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Créer un compte</h3>
+              <p className="text-gray-600">
+                Remplissez le formulaire pour créer votre compte et accéder à tous nos services
               </p>
+            </div>
+            
+            {/* Message de sécurité */}
+            <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <Shield className="h-5 w-5 text-green-600 mr-3" />
+                <div>
+                  <p className="text-sm font-medium text-green-800">Inscription sécurisée</p>
+                  <p className="text-xs text-green-600 mt-1">
+                    Toutes vos données sont chiffrées et protégées conformément au RGPD
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <RegisterForm 
+              onSubmit={handleSubmit} 
+              isLoading={isLoading}
+              error={error}
+            />
+            
+            {/* Séparateur */}
+            <div className="mt-10 pt-8 border-t border-gray-200">
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-300"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-4 bg-white text-gray-500">Déjà un compte ?</span>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <Link
+                  to="/login"
+                  className="w-full bg-white border-2 border-blue-600 text-blue-600 py-3 px-4 rounded-lg font-medium hover:bg-blue-50 hover:border-blue-700 flex items-center justify-center transition-colors"
+                >
+                  Se connecter à mon compte existant
+                </Link>
+              </div>
+            </div>
+
+            {/* Retour à l'accueil */}
+            <div className="mt-8 text-center">
+              <Link
+                to="/"
+                className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                Retour à l'accueil
+              </Link>
             </div>
           </div>
         </div>
-        
-        <div className="text-center">
-          <p className="text-xs text-gray-500">
-            En vous inscrivant, vous acceptez nos conditions d'utilisation et notre politique de confidentialité.
-          </p>
-          <p className="text-xs text-gray-500 mt-1">
-            © {new Date().getFullYear()} PharmaTogo. Tous droits réservés.
+
+        {/* Informations */}
+        <div className="mt-8 text-center">
+          <div className="inline-flex items-center text-xs text-gray-500 space-x-4">
+            <span>© {new Date().getFullYear()} PharmaTogo</span>
+            <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
+            <span>Tous droits réservés</span>
+            <span className="h-1 w-1 bg-gray-300 rounded-full"></span>
+            <span>Projet certifié SIMPLON</span>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Plateforme de gestion communautaire des pharmacies locales au Togo
           </p>
         </div>
       </div>
