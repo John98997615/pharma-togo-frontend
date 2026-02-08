@@ -1,0 +1,28 @@
+/* src/pages/auth/RegisterPage.css */
+.register-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.register-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .register-form-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.form-field-full {
+  grid-column: 1 / -1;
+}
+
+.no-wrap-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

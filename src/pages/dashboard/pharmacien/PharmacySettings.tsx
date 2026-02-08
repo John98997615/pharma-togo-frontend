@@ -562,7 +562,7 @@ const PharmacySettings: React.FC = () => {
             <h3 className="text-lg font-bold mb-4">Statuts</h3>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              {/* <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   {pharmacy.is_active ? (
                     <CheckCircle className="h-5 w-5 text-green-600 mr-2" />
@@ -587,7 +587,7 @@ const PharmacySettings: React.FC = () => {
                   {toggleActiveMutation.isPending ? '...' :
                     pharmacy.is_active ? 'Désactiver' : 'Activer'}
                 </button>
-              </div>
+              </div> */}
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
@@ -640,7 +640,7 @@ const PharmacySettings: React.FC = () => {
           </div>
 
           {/* Danger zone */}
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+          {/* <div className="bg-red-50 border border-red-200 rounded-xl p-6">
             <h3 className="text-lg font-bold text-red-800 mb-4">Zone de danger</h3>
 
             {showDangerConfirm ? (
@@ -681,7 +681,7 @@ const PharmacySettings: React.FC = () => {
                 </p>
               </div>
             )}
-          </div>
+          </div> */}
         </div>
       </div>
 

@@ -14,7 +14,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   AlertCircle,
-  Settings // Ajout de l'icône Settings
+  Settings, // Ajout de l'icône Settings
+  CreditCard
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { adminService } from '../../../services/api/admin.service';
@@ -409,8 +410,8 @@ const AdminDashboard: React.FC = () => {
         <StatCard
           title="Revenu total"
           value={`${formatAmount(dashboardStats.totalRevenue)} FCFA`}
-          icon={DollarSign}
-          color="bg-yellow-500"
+          icon={TrendingUp} // ✅ Montre la croissance
+          color="bg-green-500" // ✅ Vert pour l'argent/succès
           change="18"
           changeType="increase"
           loading={loading}
